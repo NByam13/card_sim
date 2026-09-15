@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# Blocks direct pushes to main. All work goes through a branch and a PR.
+#
+# Version-controlled rather than living in .git/hooks so it survives a fresh
+# clone. Enable with:
+#
+#     git config core.hooksPath .githooks
+#
+# Emergency override, for when a broken main genuinely cannot wait:
+#
+#     ALLOW_PUSH_TO_MAIN=1 git push origin main
+#
+# Reach for a PR first. Laravel Cloud deploys from main, so a bad main is a live
+# bad site, mid-match for anyone playing.
+
+protected_branch="main"
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    "refs/heads/$protected_branch")
+      if [ "$ALLOW_PUSH_TO_MAIN" = "1" ]; then
+        echo "pre-push: ALLOW_PUSH_TO_MAIN set, permitting push to $protected_branch." >&2
+        continue
+      fi
+
+      cat >&2 <<EOF
+
+  Push to '$protected_branch' blocked.
+
+  This repo uses a branch + pull request flow. Pushing here deploys straight to
+  production, so changes go through review first.
+
+      git checkout -b feat/your-change
+      git push -u origin feat/your-change
+      gh pr create --fill
+
+  If the work is already committed on $protected_branch, move it onto a branch:
+
+      git branch feat/your-change
+      git reset --keep origin/$protected_branch
+      git checkout feat/your-change
+
+EOF
+      exit 1
+      ;;
+  esac
+done
+
+exit 0
