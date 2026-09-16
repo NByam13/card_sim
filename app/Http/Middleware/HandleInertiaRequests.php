@@ -29,6 +29,10 @@ class HandleInertiaRequests extends Middleware
     /**
      * Define the props that are shared by default.
      *
+     * There is deliberately no `auth` prop: this app has no accounts. Who you
+     * are is per game — the seat you hold — and it is sent by the page that
+     * knows which game you are looking at.
+     *
      * @see https://inertiajs.com/shared-data
      *
      * @return array<string, mixed>
@@ -38,9 +42,6 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
-            'auth' => [
-                'user' => $request->user(),
-            ],
         ];
     }
 }
