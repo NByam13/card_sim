@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    /*
+     * PonyRec, the deck source. A deck code is imported once per seat through
+     * `GET /api/decks/{code}` and snapshotted onto the game row, so nothing here
+     * is on a hot path. No token: that endpoint is public.
+     *
+     * `verify` exists for local development only — Herd serves ponyrec.test with
+     * a certificate curl's CA bundle does not carry. Never false in production.
+     */
+    'ponyrec' => [
+        'base_url' => env('PONYREC_BASE_URL', 'https://ponyrec.net'),
+        'timeout' => (int) env('PONYREC_TIMEOUT', 5),
+        'verify' => filter_var(env('PONYREC_VERIFY_TLS', true), FILTER_VALIDATE_BOOL),
+    ],
+
 ];

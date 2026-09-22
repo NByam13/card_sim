@@ -2,7 +2,11 @@
 
 namespace App\Providers;
 
+use App\Games\Participant;
+use App\Games\ParticipantSession;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -24,6 +28,20 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->bootSeatGuard();
+    }
+
+    /**
+     * The app's only guard. It authenticates nobody: it hands back the opaque
+     * identity this browser's session is carrying, so the broadcaster has a user
+     * to resolve when someone subscribes to a game's presence channel, and so
+     * controllers can ask which seat is calling.
+     *
+     * @see Participant
+     */
+    protected function bootSeatGuard(): void
+    {
+        Auth::viaRequest('seat', fn (Request $request) => ParticipantSession::resolve($request));
     }
 
     /**
