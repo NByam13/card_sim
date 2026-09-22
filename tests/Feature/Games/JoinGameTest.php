@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Games;
 
+use App\Events\SeatClaimed;
 use App\Models\Game;
 use Database\Factories\GameFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -120,5 +122,43 @@ class JoinGameTest extends TestCase
         $first->assertRedirect("/games/{$game->code}");
         $second->assertSessionHasErrors('deck_code');
         $this->assertSame(1, Game::whereNotNull('guest_token_hash')->count());
+    }
+
+    public function test_claiming_the_seat_tells_the_other_browsers(): void
+    {
+        // The host's page is holding a copy of this game from before the join,
+        // and presence alone cannot correct it: a member set says who is
+        // connected, not who the row says is seated.
+        Event::fake([SeatClaimed::class]);
+        $this->fakeDeck();
+        $game = Game::factory()->create();
+
+        $this->post("/games/{$game->code}/join", ['deck_code' => 'abcdef123456']);
+
+        Event::assertDispatched(
+            SeatClaimed::class,
+            fn (SeatClaimed $event) => $event->game->is($game) && $event->seat === 'guest'
+        );
+    }
+
+    public function test_a_refused_join_tells_nobody(): void
+    {
+        Event::fake([SeatClaimed::class]);
+        Http::fake(['ponyrec.test/api/decks/*' => Http::response(['code' => 'deck.private'], 404)]);
+        $game = Game::factory()->create();
+
+        $this->post("/games/{$game->code}/join", ['deck_code' => 'abcdef123456']);
+
+        Event::assertNotDispatched(SeatClaimed::class);
+    }
+
+    public function test_the_seat_claimed_broadcast_carries_no_secrets(): void
+    {
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->create();
+
+        $event = new SeatClaimed($game, 'guest');
+
+        $this->assertSame(['seat' => 'guest'], $event->broadcastWith());
+        $this->assertSame('presence-game.'.$game->code, $event->broadcastOn()[0]->name);
     }
 }

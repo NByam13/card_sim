@@ -14,7 +14,10 @@ and a made-up one.
       invite link and your deck's name shown.
 - [ ] Open the invite link in the second browser. It offers the free seat; joining with the same
       deck code puts both of you in the game and flips it to active.
-- [ ] Both browsers show the other player present without a refresh.
+- [ ] Both browsers show the other player present, seated and named **without a refresh** — the
+      host's empty seat fills on its own, and neither player reads as "away".
+- [ ] The invite link's copy button puts the link on the clipboard, and the link still shows once
+      both seats are taken.
 - [ ] The second browser cannot join twice, and a third browser opening the link is offered
       watching rather than a seat.
 
@@ -35,8 +38,6 @@ and a made-up one.
 - [ ] Open a second tab in the same browser on the same game. You are the same seat, and the other
       player still sees exactly one of you.
 - [ ] Quit and reopen the browser. You are still your seat (the session cookie survives).
-- [ ] Copy the resume link into a **third** browser. It becomes that seat, and the original browser
-      stops being it (or shares it — note which happens).
 - [ ] A browser that never claimed a seat and opens the game watches; it cannot act.
 
 ## Cancelling

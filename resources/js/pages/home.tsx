@@ -18,6 +18,9 @@ export default function Home() {
       <Head title="Play" />
       <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-8 px-4 py-12">
         <header className="space-y-2">
+          <p className="text-xs font-semibold tracking-widest text-gray-500 uppercase">
+            Everfree Arena
+          </p>
           <h1 className="text-2xl font-semibold">Start a game</h1>
           <p className="text-sm text-gray-600">
             Bring a deck from PonyRec. Make it <strong>Unlisted</strong> there, then paste its code

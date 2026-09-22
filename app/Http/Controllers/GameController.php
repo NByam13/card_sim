@@ -51,18 +51,13 @@ class GameController extends Controller
     /** The game itself: a lobby for a seat, a mirror for anyone else. */
     public function show(Game $game, Request $request): Response
     {
-        $participant = $request->user();
-        $seat = $participant?->roleIn($game);
-        $token = $participant?->seatTokens[$game->code] ?? null;
+        $seat = $request->user()?->roleIn($game);
 
         return Inertia::render('games/show', [
             'game' => $this->payload($game, $seat),
             'seat' => $seat,
-            // Only ever sent to the seat it belongs to: it *is* that seat.
-            'resumeUrl' => $seat === null || $token === null ? null : route('games.resume', [
-                'game' => $game,
-                'token' => $token,
-            ]),
+            // The same link for both jobs: it offers the free seat while one is
+            // open, and brings spectators in once the game is full.
             'inviteUrl' => route('games.show', $game),
             'canJoin' => $seat === null && $game->guestSeatOpen(),
         ]);
@@ -95,20 +90,6 @@ class GameController extends Controller
         if (! $this->seating->claimGuestSeat($request, $game, $deck, $code, $request->displayName())) {
             return back()->withErrors(['deck_code' => 'Someone else just took that seat.']);
         }
-
-        return to_route('games.show', $game);
-    }
-
-    /**
-     * Adopt a seat in this browser from a resume link.
-     *
-     * The token in the URL is the seat's secret, so holding the link is the
-     * proof. A wrong one leaves the browser a watcher rather than erroring:
-     * there is nothing useful to tell someone who mistyped a secret.
-     */
-    public function resume(Game $game, string $token, Request $request): RedirectResponse
-    {
-        $this->seating->resume($request, $game, $token);
 
         return to_route('games.show', $game);
     }

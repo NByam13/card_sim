@@ -2,7 +2,7 @@
 
 **Status:** In progress
 **Branch:** `feat/anonymous-games`
-**Last updated:** 2026-09-16
+**Last updated:** 2026-09-22
 
 ## Summary
 
@@ -17,12 +17,16 @@ inherits are in that repo's `documentation/pvp-decoupling/spec.md`; the deck end
 ## Goals
 
 - Two people with a link can take the two seats of a game, with no accounts and no sign-in.
-- A seat survives a page refresh, a browser restart, and moving to another device.
+- A seat survives a page refresh and a browser restart. Moving it to another device is out
+  of scope for now.
 - A game carries the decks it is played with, so PonyRec being slow, down, or the deck being
   edited mid-match cannot break a game in progress.
 - Nothing about the MLP game is encoded here: the row names a setup, and that is all.
 
 ## Non-goals for this slice
+
+Nothing happens when the second seat fills, and that is the slice's edge: the row flips to
+`active`, both players see each other, and there is no board to deal onto yet.
 
 Turn order and the shared turn cursor, the board and its sync/persist endpoints, best-of-three
 scoring, pruning, and any UI beyond what is needed to create a game, claim a seat and see who is
@@ -67,12 +71,13 @@ row which presence ids are its two players, the way PonyRec could with user ids.
 channel members and allows `spectators + claimed seats`, which is exact when both players are
 connected and lets one extra watcher in while a seat sits empty.
 
-### Rejoining from another device
+### Rejoining from another device is out of scope
 
-A seat's page shows a resume link, `/games/{code}/resume/{token}`, which puts the token into that
-browser's session and redirects to the game. The token *is* the secret, so the link needs no
-signing; it is shown only to the seat that owns it, and anyone holding it is by definition that
-seat. Treated as "don't share this" in the UI copy.
+A resume link — `/games/{code}/resume/{token}`, putting the token into another browser's session —
+was built and then removed on 2026-09-22. Nothing about a seat needs it yet, and a page handing
+out its own secret is a thing to design once rather than carry along unused. The seat still
+survives a refresh and a browser restart, because the session cookie does. If it comes back, it
+comes back with the sharing question answered: `git show 2cd6527` has the original.
 
 ### Decks are imported once and snapshotted
 
@@ -139,16 +144,41 @@ guard-less app needs.
 | `POST /games` | Create a game and claim the host seat (deck code + optional name). |
 | `GET /games/{code}` | The game: waiting room for a seat, or a watcher's view. |
 | `POST /games/{code}/join` | Claim the guest seat (deck code + optional name). |
-| `GET /games/{code}/resume/{token}` | Adopt a seat in this browser. |
 | `DELETE /games/{code}` | Host cancels a game nobody joined. |
 
 Channel: `presence-game.{code}`, authorized from the session-held seat, refusing a spectator when
 the game is full of watchers (cap configurable, as on PonyRec).
 
+One link does both jobs: `GET /games/{code}` offers the free seat while one is open, and shows the
+game to a watcher once both are taken. The game page keeps it visible, with a copy button, for
+that second job.
+
+### Who is seated is told, not inferred
+
+Claiming the guest seat broadcasts `SeatClaimed` on the game's channel, and a page that hears it
+re-asks the server for the game.
+
+Presence cannot carry this on its own. A member set says who is *connected*; the seats come from
+the row, and every page is holding a copy of it from when it loaded. Without the event the host
+watched a player arrive as a nameless member while the seat beside them still read "Empty".
+
+The event names the seat and nothing else — a nudge to re-ask, not a copy of the game — so a page
+still only learns what `show()` would tell it, with the seat derived from its own session.
+
+It is `ShouldBroadcastNow` and `ShouldRescue`: immediate, because a lobby that updates a queue
+worker later is the bug this fixes, and rescued, because Reverb being down must not turn a claimed
+seat into a failed join.
+
+The other half of the same bug is client-side. A subscription is authorized once, when it is made,
+so the browser that opens a game as a watcher and *then* takes a seat stays a watcher on the
+channel — to the room and to itself. The game page keys its presence component on the seat, so
+claiming one remounts it and the channel is subscribed, and re-authorized, again.
+
 ## Open questions
 
 - **Spectator cap.** PonyRec's four-per-game is sized against its Reverb tier. This app's tier
   isn't chosen yet, so the cap is config with the same default.
-- **Abuse limits.** Anonymous creation wants a per-IP throttle on `POST /games`; the number waits
-  until there is traffic to size it against.
+- **Abuse limits.** `POST /games` and the join route are throttled at 10 a minute per IP, which is
+  a guess: each one costs a PonyRec deck fetch, and the real number waits until there is traffic
+  to size it against.
 - **Display names.** Free text today. If that turns out badly, the fallback is seat labels only.

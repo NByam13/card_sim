@@ -5,7 +5,7 @@ configureEcho({
   broadcaster: 'reverb',
 });
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'Everfree Arena';
 
 void createInertiaApp({
   title: (title) => (title ? `${title} - ${appName}` : appName),

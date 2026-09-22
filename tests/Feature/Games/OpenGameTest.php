@@ -77,8 +77,7 @@ class OpenGameTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('games/show')
                 ->where('seat', 'host')
-                ->where('canJoin', false)
-                ->whereNot('resumeUrl', null));
+                ->where('canJoin', false));
     }
 
     public function test_only_the_hash_of_the_seat_token_is_stored(): void

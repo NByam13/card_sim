@@ -2,6 +2,7 @@
 
 namespace App\Games;
 
+use App\Events\SeatClaimed;
 use App\Models\Game;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -71,30 +72,10 @@ final class Seating
 
         Log::info('game.joined', ['game' => $game->code, 'deck' => $deckCode]);
 
+        // Everyone else is holding a copy of this game from before the seat was
+        // taken, and no amount of presence tells them otherwise.
+        SeatClaimed::dispatch($game->refresh(), 'guest');
+
         return true;
-    }
-
-    /**
-     * Adopt a seat in this browser from a resume link.
-     *
-     * The token is the secret, so a link carrying a valid one *is* the seat's
-     * proof; there is nothing further to verify. Returns the seat claimed, or
-     * null when the token holds none.
-     */
-    public function resume(Request $request, Game $game, string $token): ?string
-    {
-        $seat = $game->seatFor($token);
-
-        if ($seat === null) {
-            Log::warning('game.resume_rejected', ['game' => $game->code]);
-
-            return null;
-        }
-
-        ParticipantSession::remember($request, $game->code, $token);
-
-        Log::info('game.resumed', ['game' => $game->code, 'seat' => $seat]);
-
-        return $seat;
     }
 }

@@ -1,6 +1,6 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useState } from 'react';
 
 type Seat = 'host' | 'guest';
 type Role = Seat | 'spectator';
@@ -28,7 +28,6 @@ interface Member {
 interface Props {
   game: Game;
   seat: Seat | null;
-  resumeUrl: string | null;
   inviteUrl: string;
   canJoin: boolean;
 }
@@ -36,13 +35,54 @@ interface Props {
 /**
  * A game before play starts: who is seated, who is here, and the link that
  * brings the second player in.
- *
- * Presence is the live part. A member is a browser, not a person, so two tabs of
- * the same seat appear once.
  */
-export default function Show({ game, seat, resumeUrl, inviteUrl, canJoin }: Props) {
+export default function Show({ game, seat, inviteUrl, canJoin }: Props) {
+  return (
+    <>
+      <Head title={seat ? 'Your game' : 'Watching'} />
+      <div className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-4 py-12">
+        <Link href="/" className="text-xs font-semibold tracking-widest text-gray-500 uppercase">
+          Everfree Arena
+        </Link>
+
+        <header className="space-y-1">
+          <h1 className="text-2xl font-semibold">
+            {game.status === 'waiting' ? 'Waiting for a second player' : 'Both players seated'}
+          </h1>
+          <p className="text-sm text-gray-600">
+            {seat ? `You are the ${seat}.` : 'You are watching this game.'}
+          </p>
+        </header>
+
+        {/*
+          Keyed by seat, so claiming one remounts this and the channel is
+          subscribed again. A subscription is authorized once, when it is made:
+          the browser that joins as a watcher and then takes a seat would
+          otherwise stay a watcher to everyone here, including itself.
+        */}
+        <Table key={seat ?? 'watching'} game={game} seat={seat} />
+
+        <InviteLink url={inviteUrl} full={!canJoin && game.seats.guest.claimed} />
+        {canJoin && <JoinForm code={game.code} />}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The two seats and who is at them, live.
+ *
+ * Presence is one half of it: a member is a browser, not a person, so two tabs
+ * of the same seat appear once. The other half is the game itself, which the
+ * server re-sends whenever a seat is claimed — presence can only say who is
+ * connected, never who the row says is seated.
+ */
+function Table({ game, seat }: { game: Game; seat: Seat | null }) {
   const [members, setMembers] = useState<Member[]>([]);
-  const { channel } = useEchoPresence(`game.${game.code}`, []);
+
+  const { channel } = useEchoPresence(`game.${game.code}`, '.seat.claimed', () =>
+    router.reload({ only: ['game', 'canJoin'] })
+  );
 
   useEffect(() => {
     const presence = channel();
@@ -61,72 +101,156 @@ export default function Show({ game, seat, resumeUrl, inviteUrl, canJoin }: Prop
   const watching = members.filter((m) => m.role === 'spectator').length;
 
   return (
-    <>
-      <Head title={seat ? 'Your game' : 'Watching'} />
-      <div className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-4 py-12">
-        <header className="space-y-1">
-          <h1 className="text-2xl font-semibold">
-            {game.status === 'waiting' ? 'Waiting for a second player' : 'Both players seated'}
-          </h1>
-          <p className="text-sm text-gray-600">
-            {seat ? `You are the ${seat}.` : 'You are watching this game.'}
-          </p>
-        </header>
+    <div className="space-y-2">
+      <ul className="divide-y divide-gray-200 rounded border border-gray-200">
+        {(['host', 'guest'] as Seat[]).map((which) => {
+          const state = game.seats[which];
+          return (
+            <li key={which} className="flex items-center justify-between gap-4 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">
+                  {state.claimed ? state.name : 'Empty seat'}
+                  {seat === which && <span className="ml-2 text-xs text-gray-500">you</span>}
+                </p>
+                <p className="text-xs text-gray-500">{state.deck_name ?? 'No deck yet'}</p>
+              </div>
+              <span className="text-xs text-gray-500">
+                {present(which) ? 'here' : state.claimed ? 'away' : '—'}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
 
-        <ul className="divide-y divide-gray-200 rounded border border-gray-200">
-          {(['host', 'guest'] as Seat[]).map((which) => {
-            const state = game.seats[which];
-            return (
-              <li key={which} className="flex items-center justify-between gap-4 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium">
-                    {state.claimed ? state.name : 'Empty seat'}
-                    {seat === which && <span className="ml-2 text-xs text-gray-500">you</span>}
-                  </p>
-                  <p className="text-xs text-gray-500">{state.deck_name ?? 'No deck yet'}</p>
-                </div>
-                <span className="text-xs text-gray-500">
-                  {present(which) ? 'here' : state.claimed ? 'away' : '—'}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+      {watching > 0 && (
+        <p className="text-xs text-gray-500">
+          {watching} {watching === 1 ? 'person is' : 'people are'} watching.
+        </p>
+      )}
+    </div>
+  );
+}
 
-        {watching > 0 && (
-          <p className="text-xs text-gray-500">
-            {watching} {watching === 1 ? 'person is' : 'people are'} watching.
-          </p>
-        )}
-
-        {game.status === 'waiting' && seat !== null && <InviteLink url={inviteUrl} />}
-        {canJoin && <JoinForm code={game.code} />}
-        {resumeUrl && <ResumeLink url={resumeUrl} />}
+/**
+ * The same link does both jobs: it offers the free seat while one is open, and
+ * brings spectators in once the game is full.
+ */
+function InviteLink({ url, full }: { url: string; full: boolean }) {
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-medium">{full ? 'Link to this game' : 'Invite your opponent'}</h2>
+      <p className="text-xs text-gray-500">
+        {full
+          ? 'Both seats are taken. Anyone with this link can watch.'
+          : 'Anyone with this link can take the free seat.'}
+      </p>
+      <div className="relative">
+        <code className="block overflow-x-auto rounded bg-gray-100 py-2 pr-11 pl-3 text-xs leading-6">
+          {url}
+        </code>
+        <CopyButton value={url} />
       </div>
+    </section>
+  );
+}
+
+/**
+ * Sits inside the link box and copies it, turning into a green check for a
+ * moment.
+ *
+ * The clipboard API needs a secure context and a permission that can be denied,
+ * so a failure says so rather than claiming a copy that never happened — the
+ * link is on screen either way, to select by hand.
+ *
+ * It carries the box's own background, so a link too long for the box passes
+ * behind it rather than through it.
+ */
+function CopyButton({ value }: { value: string }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  useEffect(() => {
+    if (state === 'idle') return;
+
+    const timer = setTimeout(() => setState('idle'), 2000);
+    return () => clearTimeout(timer);
+  }, [state]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setState('copied');
+    } catch {
+      setState('failed');
+    }
+  };
+
+  const label =
+    state === 'copied' ? 'Link copied' : state === 'failed' ? 'Copy failed' : 'Copy link';
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={copy}
+        title={label}
+        aria-label={label}
+        className="absolute inset-y-0 right-0 flex items-center rounded-r bg-gray-100 px-2 text-gray-500 hover:text-gray-900"
+      >
+        {state === 'copied' ? (
+          <CheckIcon className="size-4 text-green-600" />
+        ) : state === 'failed' ? (
+          <CrossIcon className="size-4 text-red-600" />
+        ) : (
+          <ClipboardIcon className="size-4" />
+        )}
+      </button>
+      {/* Spoken, since the icon swap is the only other word of it. */}
+      <span aria-live="polite" className="sr-only">
+        {state === 'idle' ? '' : label}
+      </span>
     </>
   );
 }
 
-function InviteLink({ url }: { url: string }) {
+function ClipboardIcon({ className }: { className: string }) {
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-medium">Invite your opponent</h2>
-      <p className="text-xs text-gray-500">Anyone with this link can take the free seat.</p>
-      <code className="block overflow-x-auto rounded bg-gray-100 px-3 py-2 text-xs">{url}</code>
-    </section>
+    <Icon className={className}>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </Icon>
   );
 }
 
-function ResumeLink({ url }: { url: string }) {
+function CheckIcon({ className }: { className: string }) {
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-medium">Play from another device</h2>
-      <p className="text-xs text-gray-500">
-        This link carries your seat. Keep it to yourself — anyone who opens it becomes you in this
-        game.
-      </p>
-      <code className="block overflow-x-auto rounded bg-gray-100 px-3 py-2 text-xs">{url}</code>
-    </section>
+    <Icon className={className}>
+      <path d="m20 6-11 11-5-5" />
+    </Icon>
+  );
+}
+
+function CrossIcon({ className }: { className: string }) {
+  return (
+    <Icon className={className}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </Icon>
+  );
+}
+
+function Icon({ className, children }: { className: string; children: ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      {children}
+    </svg>
   );
 }
 
