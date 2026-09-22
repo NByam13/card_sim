@@ -117,6 +117,17 @@ One row is a match. Columns this slice needs:
 Later slices add turn order, the opaque `turn_stop`, the state columns, scoring and `winner_seat`.
 They are deliberately not migrated ahead of use.
 
+### Cancelling is announced, not just done
+
+The host may cancel a game nobody joined, from a button on the game page that asks a second time
+before it goes. Deleting the row then broadcasts `GameCancelled`, and a page that hears it stops
+showing a lobby and says so.
+
+Leaving quietly is the `SeatClaimed` problem one step worse: the row is gone, so anyone still on
+the page is being offered a seat that cannot be claimed, and finds out when their join comes back
+a bare 404. The event carries the code rather than the game, because by the time it is heard there
+is nothing to load.
+
 ### Seat rules
 
 The same rules as PonyRec's `GamePolicy`, with the user swapped for the seat: anyone with the link
@@ -147,7 +158,10 @@ guard-less app needs.
 | `DELETE /games/{code}` | Host cancels a game nobody joined. |
 
 Channel: `presence-game.{code}`, authorized from the session-held seat, refusing a spectator when
-the game is full of watchers (cap configurable, as on PonyRec).
+the game is full of watchers (cap configurable, as on PonyRec). The decision lives in
+`App\Broadcasting\GameChannel` rather than a closure in `routes/channels.php`: it is the slice's
+authorization boundary — the one place a subscriber becomes a `host`, a `guest` or a watcher — and
+a closure in a route file has nowhere to be called from. `GameChannelTest` calls it directly.
 
 One link does both jobs: `GET /games/{code}` offers the free seat while one is open, and shows the
 game to a watcher once both are taken. The game page keeps it visible, with a copy button, for

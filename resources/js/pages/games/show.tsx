@@ -1,6 +1,7 @@
+import { destroy } from '@/actions/App/Http/Controllers/GameController';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
-import { FormEvent, ReactNode, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
 
 type Seat = 'host' | 'guest';
 type Role = Seat | 'spectator';
@@ -30,13 +31,20 @@ interface Props {
   seat: Seat | null;
   inviteUrl: string;
   canJoin: boolean;
+  canCancel: boolean;
 }
 
 /**
  * A game before play starts: who is seated, who is here, and the link that
  * brings the second player in.
  */
-export default function Show({ game, seat, inviteUrl, canJoin }: Props) {
+export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Props) {
+  const [cancelled, setCancelled] = useState(false);
+
+  // Stable, so the channel's handlers are bound once rather than on every
+  // render of this page.
+  const onCancelled = useCallback(() => setCancelled(true), []);
+
   return (
     <>
       <Head title={seat ? 'Your game' : 'Watching'} />
@@ -45,27 +53,53 @@ export default function Show({ game, seat, inviteUrl, canJoin }: Props) {
           Everfree Arena
         </Link>
 
-        <header className="space-y-1">
-          <h1 className="text-2xl font-semibold">
-            {game.status === 'waiting' ? 'Waiting for a second player' : 'Both players seated'}
-          </h1>
-          <p className="text-sm text-gray-600">
-            {seat ? `You are the ${seat}.` : 'You are watching this game.'}
-          </p>
-        </header>
+        {cancelled ? (
+          <Cancelled />
+        ) : (
+          <>
+            <header className="space-y-1">
+              <h1 className="text-2xl font-semibold">
+                {game.status === 'waiting' ? 'Waiting for a second player' : 'Both players seated'}
+              </h1>
+              <p className="text-sm text-gray-600">
+                {seat ? `You are the ${seat}.` : 'You are watching this game.'}
+              </p>
+            </header>
 
-        {/*
-          Keyed by seat, so claiming one remounts this and the channel is
-          subscribed again. A subscription is authorized once, when it is made:
-          the browser that joins as a watcher and then takes a seat would
-          otherwise stay a watcher to everyone here, including itself.
-        */}
-        <Table key={seat ?? 'watching'} game={game} seat={seat} />
+            {/*
+              Keyed by seat, so claiming one remounts this and the channel is
+              subscribed again. A subscription is authorized once, when it is
+              made: the browser that joins as a watcher and then takes a seat
+              would otherwise stay a watcher to everyone here, including itself.
+            */}
+            <Table key={seat ?? 'watching'} game={game} seat={seat} onCancelled={onCancelled} />
 
-        <InviteLink url={inviteUrl} full={!canJoin && game.seats.guest.claimed} />
-        {canJoin && <JoinForm code={game.code} />}
+            <InviteLink url={inviteUrl} full={!canJoin && game.seats.guest.claimed} />
+            {canJoin && <JoinForm code={game.code} />}
+            {canCancel && <CancelGame code={game.code} />}
+          </>
+        )}
       </div>
     </>
+  );
+}
+
+/**
+ * What is left when the host cancels: the row is gone, so there is nothing to
+ * show and nothing to reload — only somewhere else to go.
+ */
+function Cancelled() {
+  return (
+    <div className="space-y-2">
+      <h1 className="text-2xl font-semibold">The host cancelled this game</h1>
+      <p className="text-sm text-gray-600">
+        It was called off before both seats were taken.{' '}
+        <Link href="/" className="font-medium underline">
+          Start one of your own
+        </Link>
+        .
+      </p>
+    </div>
   );
 }
 
@@ -77,11 +111,22 @@ export default function Show({ game, seat, inviteUrl, canJoin }: Props) {
  * server re-sends whenever a seat is claimed — presence can only say who is
  * connected, never who the row says is seated.
  */
-function Table({ game, seat }: { game: Game; seat: Seat | null }) {
+function Table({
+  game,
+  seat,
+  onCancelled,
+}: {
+  game: Game;
+  seat: Seat | null;
+  onCancelled: () => void;
+}) {
   const [members, setMembers] = useState<Member[]>([]);
 
+  // The page's one subscription, on purpose: channels are reference-counted, so
+  // a second one here would keep the first alive through the remount above and
+  // the seat would never be re-authorized.
   const { channel } = useEchoPresence(`game.${game.code}`, '.seat.claimed', () =>
-    router.reload({ only: ['game', 'canJoin'] })
+    router.reload({ only: ['game', 'canJoin', 'canCancel'] })
   );
 
   useEffect(() => {
@@ -94,8 +139,9 @@ function Table({ game, seat }: { game: Game; seat: Seat | null }) {
       .leaving((member: Member) =>
         setMembers((current) => current.filter((m) => m.id !== member.id))
       )
+      .listen('.game.cancelled', onCancelled)
       .error((error: unknown) => console.error('game channel subscription failed', error));
-  }, [channel]);
+  }, [channel, onCancelled]);
 
   const present = (role: Role) => members.some((m) => m.role === role);
   const watching = members.filter((m) => m.role === 'spectator').length;
@@ -251,6 +297,50 @@ function Icon({ className, children }: { className: string; children: ReactNode 
     >
       {children}
     </svg>
+  );
+}
+
+/**
+ * The host's way out of a game nobody joined.
+ *
+ * Asks twice rather than opening a dialog: the game is gone for good, and the
+ * second click is cheaper to explain than a modal is to build.
+ */
+function CancelGame({ code }: { code: string }) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="text-xs font-medium text-gray-500 underline hover:text-gray-900"
+        >
+          Cancel this game
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <p className="text-xs text-gray-600">Cancel this game? The link stops working.</p>
+      <button
+        type="button"
+        onClick={() => router.delete(destroy.url(code))}
+        className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+      >
+        Cancel it
+      </button>
+      <button
+        type="button"
+        onClick={() => setConfirming(false)}
+        className="text-xs font-medium text-gray-500 underline hover:text-gray-900"
+      >
+        Keep it
+      </button>
+    </div>
   );
 }
 

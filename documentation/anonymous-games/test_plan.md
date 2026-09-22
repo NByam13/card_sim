@@ -42,9 +42,12 @@ and a made-up one.
 
 ## Cancelling
 
-- [ ] As host, cancel a game nobody has joined. It disappears and the invite link 404s.
-- [ ] You cannot cancel once someone has joined.
-- [ ] The guest cannot cancel at all.
+- [ ] As host, cancel a game nobody has joined: the button asks a second time, then the game
+      disappears and the invite link 404s.
+- [ ] With the invite link open in the second browser, cancel from the first. The second browser
+      says the host cancelled it **without a refresh**, and stops offering the seat.
+- [ ] The cancel button is gone once someone has joined, and so is the guest's — neither seat is
+      offered it.
 
 ## Nothing MLP-specific leaked in
 

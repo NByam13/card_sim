@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\GameCancelled;
 use App\Games\Participant;
 use App\Games\ParticipantSession;
 use App\Games\PonyRec\DeckClient;
@@ -60,6 +61,9 @@ class GameController extends Controller
             // open, and brings spectators in once the game is full.
             'inviteUrl' => route('games.show', $game),
             'canJoin' => $seat === null && $game->guestSeatOpen(),
+            // The same rule `destroy()` enforces, so the button is only ever
+            // offered where the request behind it would be allowed.
+            'canCancel' => $seat === 'host' && $game->status === 'waiting',
         ]);
     }
 
@@ -106,6 +110,10 @@ class GameController extends Controller
         ParticipantSession::forget($request, $game->code);
 
         Log::info('game.cancelled', ['game' => $game->code]);
+
+        // Anyone else on the page is now looking at a game that is gone, and
+        // would find out by having a join refused with a bare 404.
+        GameCancelled::dispatch($game->code);
 
         return to_route('home');
     }
