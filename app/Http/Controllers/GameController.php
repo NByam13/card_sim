@@ -52,7 +52,7 @@ class GameController extends Controller
     /** The game itself: a lobby for a seat, a mirror for anyone else. */
     public function show(Game $game, Request $request): Response
     {
-        $seat = $request->user()?->roleIn($game);
+        $seat = Participant::fromRequest($request)?->roleIn($game);
 
         return Inertia::render('games/show', [
             'game' => $this->payload($game, $seat),
@@ -70,7 +70,7 @@ class GameController extends Controller
     /** Take the open guest seat. */
     public function join(Game $game, ClaimSeatRequest $request): RedirectResponse
     {
-        $participant = $request->user();
+        $participant = Participant::fromRequest($request);
 
         if ($participant?->holdsSeatIn($game)) {
             return back()->withErrors(['deck_code' => 'You are already seated in this game.']);
@@ -101,7 +101,7 @@ class GameController extends Controller
     /** Cancel a game nobody joined. Host only, and only while waiting. */
     public function destroy(Game $game, Request $request): RedirectResponse
     {
-        $participant = $request->user();
+        $participant = Participant::fromRequest($request);
 
         abort_if($participant?->roleIn($game) !== 'host', 403, 'Only the host can cancel this game.');
         abort_if($game->status !== 'waiting', 403, 'This game has already started.');

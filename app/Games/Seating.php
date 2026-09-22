@@ -16,7 +16,11 @@ use Illuminate\Support\Facades\Log;
  */
 final class Seating
 {
-    /** Create a game with its host seat already claimed. */
+    /**
+     * Create a game with its host seat already claimed.
+     *
+     * @param  array<string, mixed>  $deck
+     */
     public function open(Request $request, string $setup, array $deck, string $deckCode, ?string $name): Game
     {
         $token = Game::newToken();

@@ -76,6 +76,10 @@ final class SpectatorSeats
 
         $users = is_object($response) ? ($response->users ?? []) : ($response['users'] ?? []);
 
+        if (! is_array($users)) {
+            return 0;
+        }
+
         return collect($users)
             ->map(fn ($user) => is_array($user) ? ($user['id'] ?? null) : ($user->id ?? null))
             ->filter(fn ($id) => is_string($id))

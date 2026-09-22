@@ -13,6 +13,24 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    # The suite itself runs on sqlite in memory; this is here because `composer
+    # setup` migrates, and running those migrations on the engine production
+    # uses is the only check that they do.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: card_sim
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

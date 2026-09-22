@@ -4,6 +4,7 @@ namespace App\Games;
 
 use App\Models\Game;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Http\Request;
 
 /**
  * Whoever is making this request, as far as the broadcaster is concerned.
@@ -31,6 +32,22 @@ final readonly class Participant implements Authenticatable
         public string $id,
         public array $seatTokens = [],
     ) {}
+
+    /**
+     * Whoever is making this request, or null before a session exists.
+     *
+     * Asked for here rather than reading `$request->user()` at each call site:
+     * the framework annotates that as the starter kit's `App\Models\User`,
+     * which this app deleted along with its accounts, so every use of it is a
+     * method call on a class that is not there. The guard really does resolve a
+     * Participant — this is where that is stated once and checked.
+     */
+    public static function fromRequest(Request $request): ?self
+    {
+        $participant = $request->user();
+
+        return $participant instanceof self ? $participant : null;
+    }
 
     /** The seat this participant holds in a game, or null when watching. */
     public function roleIn(Game $game): ?string
