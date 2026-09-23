@@ -19,30 +19,37 @@ export function storyStageRank(stage: string | null | undefined): number {
 
 /**
  * The base printing a card is a copy of: the identity PonyRec's 4-copy cap uses,
- * which collapses the ※ shining marker and the Day/Night art variants so
- * `BP02-ER01`, `※BP02-ER01` and `※BP02-ER01D` are all one printing.
+ * which collapses the ※ shining marker, the Day/Night art variants and the
+ * alt-art promos, so `BP02-ER01`, `※BP02-ER01D` and `※BP02-ER01-P` are all one
+ * printing.
+ *
+ * PonyRec sends this as `copy_key` and that is the answer whenever it is there.
  *
  * ---
  *
- * **This is a stand-in.** PonyRec computes it as
- * `replace(printed_number || card_number, '※', '')`, and `printed_number` is
- * precisely what collapses an art variant (`Card::copyKey()` reads it when
- * `variant_kind === 'art'`). The deck endpoint does not return `printed_number`,
- * so that path is reconstructed here from the `variant` object it does return:
- * an art variant's trailing letter is the variant suffix, and dropping it leaves
- * the base number.
+ * **The fallback is a stand-in**, for decks snapshotted before the endpoint
+ * carried the field (NByam13/kayou_structured#170). PonyRec computes the key
+ * from `printed_number`, which the endpoint does not send, so it is
+ * approximated from the `variant` object it does: an art variant's trailing
+ * letter is the variant suffix, and dropping it leaves the base number.
  *
- * The right fix is on PonyRec — `printed_number` already survives `CardPool`'s
- * column pruning, annotated "client copyKey", so the field exists and is meant
- * for this consumer; the deck endpoint simply omitted it. When it lands, this
- * whole function becomes the one-line original.
+ * That approximation gets the shining and art-variant cases right and **promos
+ * wrong**, since an alt-art promo carries no `variant` and its `-P` suffix
+ * survives. It cannot do better from what it is given — which is the whole
+ * reason the field was added upstream.
  *
- * Only `arrangeSceneDeck` reads this, and it degrades gracefully: a Scene Deck
- * misread as multi-printing just shuffles without floating its shining copies.
+ * Only `arrangeSceneDeck` reads this, and it degrades gracefully either way: a
+ * Scene Deck misread as multi-printing just shuffles without floating its
+ * shining copies. Delete the fallback once no stored snapshot predates the
+ * field.
  *
  * @see documentation/local-board/spec.md
  */
-export function copyKey(card: Pick<Card, 'card_number' | 'variant'>): string {
+export function copyKey(card: Pick<Card, 'card_number' | 'copy_key' | 'variant'>): string {
+  if (card.copy_key) {
+    return card.copy_key;
+  }
+
   const base = card.card_number.replace(/※/g, '');
 
   return card.variant?.kind === 'art' ? base.replace(/[A-Z]$/, '') : base;

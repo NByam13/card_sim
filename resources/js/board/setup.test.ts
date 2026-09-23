@@ -1,5 +1,6 @@
 import { Card } from '@/types/cards';
 import { describe, expect, it, vi } from 'vitest';
+import { copyKey } from './mlp';
 import { arrangeSceneDeck, pileShuffle, shuffle, shuffleDeck } from './setup';
 import { CardInstance } from './types';
 
@@ -18,9 +19,15 @@ let uidCounter = 0;
  * A scene printing. `art` marks it as a Day/Night variant, which is what
  * collapses it onto the base printing its number is a suffix of.
  */
-function scene(cardNumber: string, rarity: string, art: string | null = null): CardInstance {
+function scene(
+  cardNumber: string,
+  rarity: string,
+  art: string | null = null,
+  copy_key?: string
+): CardInstance {
   const card: Card = {
     card_number: cardNumber,
+    copy_key,
     name: 'Golden Oak Library Floor 2',
     subtype: 'scene',
     rarity,
@@ -59,6 +66,32 @@ function singlePrintingDeck(): CardInstance[] {
 }
 
 const isShining = (c: CardInstance) => c.card.rarity.startsWith('※');
+
+describe('copyKey', () => {
+  it('uses the key PonyRec sent, whatever the number looks like', () => {
+    // The endpoint's answer is the answer. An alt-art promo carries no `variant`
+    // and keeps its suffix, so this is the case the fallback below cannot get
+    // right — and the reason the field exists upstream.
+    const promo = scene('※BP02-ER01-P', '※ER', null, 'BP02-ER01');
+
+    expect(copyKey(promo.card)).toBe('BP02-ER01');
+  });
+
+  describe('falling back for a snapshot taken before the field existed', () => {
+    it('strips the shining marker', () => {
+      expect(copyKey(scene('※BP02-ER01', '※ER').card)).toBe('BP02-ER01');
+    });
+
+    it('collapses a Day/Night art variant onto its base printing', () => {
+      expect(copyKey(scene('※BP02-ER01D', '※ER', 'day').card)).toBe('BP02-ER01');
+      expect(copyKey(scene('※BP02-ER01N', '※ER', 'night').card)).toBe('BP02-ER01');
+    });
+
+    it('leaves a plain printing alone', () => {
+      expect(copyKey(scene('BP02-ER01', 'ER').card)).toBe('BP02-ER01');
+    });
+  });
+});
 
 describe('arrangeSceneDeck', () => {
   it('floats the shining printings to the top when every card is one base printing', () => {

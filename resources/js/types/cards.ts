@@ -28,6 +28,17 @@ export interface Card {
    * contract and must not become a dependency.
    */
   card_number: string;
+  /**
+   * The card's identity *across* printings: the shining ※ marker, the Day/Night
+   * art variants and the alt-art promos all collapse onto one key. This is the
+   * grouping the 4-copy deck limit uses, so it is also what answers "is this
+   * pile all the same card?".
+   *
+   * Optional only until PonyRec ships it (NByam13/kayou_structured#170). It
+   * cannot be derived from the rest of this shape — see `copyKey` in
+   * `board/mlp.ts`, which falls back to an approximation while it is absent.
+   */
+  copy_key?: string;
   name: string;
   subtype: 'character' | 'event' | 'item' | 'scene' | 'story' | 'main-character' | 'token';
   /** Rarity code (`C`, `CR`, `※ER`, `RR`, `TK` …). The ※ marks a shining printing. */
