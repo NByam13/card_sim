@@ -9,9 +9,8 @@ function inst(uid: string, name: string): CardInstance {
   return {
     uid,
     card: {
-      id: 1,
       name,
-      card_number: 'BP01-C01',
+      card_number: `BP01-C${uid}`,
       subtype: 'character',
       thumb_url: `/thumb/${uid}.webp`,
       image_url: `/full/${uid}.webp`,
