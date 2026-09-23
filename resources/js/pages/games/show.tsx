@@ -1,4 +1,8 @@
 import { destroy } from '@/actions/App/Http/Controllers/GameController';
+import BoardArena from '@/board/components/BoardArena';
+import ZoomControls from '@/board/components/ZoomControls';
+import { usePersistentZoom } from '@/board/zoom';
+import { Deck } from '@/types/cards';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
@@ -18,6 +22,8 @@ interface Game {
   status: 'waiting' | 'active' | 'finished';
   seats: Record<Seat, SeatState>;
   you: Seat | null;
+  /** This seat's own deck snapshot, to deal its board from. Null for a watcher. */
+  deck: Deck | null;
 }
 
 interface Member {
@@ -35,8 +41,10 @@ interface Props {
 }
 
 /**
- * A game before play starts: who is seated, who is here, and the link that
- * brings the second player in.
+ * A game: the lobby until you hold a seat, then your half of the table.
+ *
+ * A watcher stays on the lobby — there is nothing to show them until the sync
+ * slice gives them a board to mirror.
  */
 export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Props) {
   const [cancelled, setCancelled] = useState(false);
@@ -44,6 +52,10 @@ export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Prop
   // Stable, so the channel's handlers are bound once rather than on every
   // render of this page.
   const onCancelled = useCallback(() => setCancelled(true), []);
+
+  if (!cancelled && seat && game.deck) {
+    return <Playing game={game} seat={seat} deck={game.deck} onCancelled={onCancelled} />;
+  }
 
   return (
     <>
@@ -79,6 +91,51 @@ export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Prop
             {canCancel && <CancelGame code={game.code} />}
           </>
         )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Your half of the table.
+ *
+ * The board fills the screen rather than sitting inside the lobby's column: it
+ * is the page now, and the lobby's chrome would cost height the table needs.
+ * The presence strip rides along in the header, which the shell scrolls.
+ */
+function Playing({
+  game,
+  seat,
+  deck,
+  onCancelled,
+}: {
+  game: Game;
+  seat: Seat;
+  deck: Deck;
+  onCancelled: () => void;
+}) {
+  const [scale, setScale] = usePersistentZoom('board', 1);
+
+  return (
+    <>
+      <Head title="Your game" />
+      <div className="flex h-screen flex-col">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
+          <Link href="/" className="text-xs font-semibold tracking-widest text-gray-500 uppercase">
+            Everfree Arena
+          </Link>
+          <ZoomControls scale={scale} onChange={setScale} />
+        </div>
+
+        <BoardArena
+          deck={deck}
+          scale={scale}
+          header={
+            <div className="mb-3">
+              <Table key={seat} game={game} seat={seat} onCancelled={onCancelled} />
+            </div>
+          }
+        />
       </div>
     </>
   );

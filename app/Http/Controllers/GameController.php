@@ -119,9 +119,12 @@ class GameController extends Controller
     }
 
     /**
-     * What both seats and watchers may know about a game. Deck snapshots are
-     * deliberately not sent yet — no board exists to deal them onto, and a seat's
-     * own deck list is not the opponent's business.
+     * What both seats and watchers may know about a game.
+     *
+     * A seat gets its own deck snapshot, because its board is dealt from it in
+     * the browser. It never gets the other seat's: that is the opponent's hand,
+     * and hydrating their cards is the sync slice's job, from the frames they
+     * choose to send.
      *
      * @return array<string, mixed>
      */
@@ -144,6 +147,8 @@ class GameController extends Controller
                 ],
             ],
             'you' => $seat,
+            // Null for a watcher, who has no board of their own to deal.
+            'deck' => $seat ? $game->deckFor($seat) : null,
         ];
     }
 }

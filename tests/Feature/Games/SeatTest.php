@@ -35,6 +35,27 @@ class SeatTest extends TestCase
                 ->where('canJoin', false));
     }
 
+    public function test_a_seat_is_given_its_own_deck_to_deal(): void
+    {
+        $game = Game::factory()->hostToken('host-token')->create();
+
+        $this->withSession(['seat_tokens' => [$game->code => 'host-token']])
+            ->get("/games/{$game->code}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('game.deck.name', 'Host deck'));
+    }
+
+    public function test_a_watcher_is_given_nobody_deck(): void
+    {
+        // A deck list is the other player's hand. Hydrating an opponent's cards
+        // is the sync slice's job, from the frames they choose to send.
+        $game = Game::factory()->guestToken('guest-token')->create();
+
+        $this->get("/games/{$game->code}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('game.deck', null));
+    }
+
     public function test_a_wrong_token_holds_nothing(): void
     {
         $game = Game::factory()->hostToken('host-token')->create();
