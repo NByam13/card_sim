@@ -10,6 +10,7 @@ import {
 } from '../context';
 import { SELECTABLE_ATTR } from '../selection';
 import { CardInstance, rendersLandscape, ZoneId } from '../types';
+import CardContextMenu from './CardContextMenu';
 import CardFace, { backIsLandscape, BASE_WIDTH, BASE_WIDTH_LANDSCAPE, cardBack } from './CardFace';
 
 /**
@@ -78,6 +79,7 @@ export default function BoardCard({
   // dropped into Retire, one still selected. Anything past the drag threshold is
   // a drag, and its click is not a click.
   const pressedAt = useRef<{ x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [hovered, setHovered] = useState(false);
   // The zoom preview only pops after a brief dwell, so sweeping across the board
   // doesn't flash previews under the cursor.
@@ -95,6 +97,16 @@ export default function BoardCard({
     focus.setHovered(null);
     clearTimeout(hoverTimer.current);
     setHovered(false);
+  };
+
+  // Opening the menu makes this card the shortcut target: the menu is a portal,
+  // so the pointer leaves the card and `hovered` clears, and its rows advertise
+  // the very keys that would then have nothing to act on.
+  const openMenuAtCard = () => {
+    const r = rootRef.current?.getBoundingClientRect();
+    if (!r) return;
+    focus.setSelected(instance.uid);
+    setMenu({ x: r.right - 4, y: r.top });
   };
 
   return (
@@ -138,6 +150,11 @@ export default function BoardCard({
             focus.clickCard(instance.uid);
           }
         }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          focus.setSelected(instance.uid);
+          setMenu({ x: e.clientX, y: e.clientY });
+        }}
         onMouseEnter={startHover}
         onMouseLeave={endHover}
         style={{ width }}
@@ -179,6 +196,20 @@ export default function BoardCard({
 
         {!faceDown && (
           <>
+            {/* ⋮ menu trigger (touch-friendly), revealed on hover. */}
+            <button
+              onPointerDown={stopDrag}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                openMenuAtCard();
+              }}
+              className="absolute top-0 right-0 hidden rounded-bl bg-black/60 px-1 text-[11px] leading-tight text-white group-hover:block"
+              aria-label="Card actions"
+            >
+              ⋮
+            </button>
+
             {/* Counters badge (bottom-left) — click to +1; dbl-click must not tap. */}
             {counters > 0 && (
               <button
@@ -218,6 +249,19 @@ export default function BoardCard({
 
       {/* Hover-zoom preview (face-up only), pinned to the bottom-right corner. */}
       {hovered && !lifted && !faceDown && <HoverPreview card={card} />}
+
+      {menu && (
+        <CardContextMenu
+          instance={instance}
+          zone={zone}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => {
+            focus.setSelected(null);
+            setMenu(null);
+          }}
+        />
+      )}
     </>
   );
 }
