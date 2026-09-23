@@ -26,6 +26,24 @@ if (typeof document !== 'undefined' && !document.elementFromPoint) {
   document.elementFromPoint = () => null;
 }
 
+// jsdom parses <dialog> but implements none of its behaviour, so `showModal()`
+// throws. The top layer, the focus trap and inertness are all layout and
+// browser-chrome concerns jsdom has no notion of; what a test can observe is
+// whether the dialog is open, so that is what these stubs keep true.
+if (typeof HTMLDialogElement !== 'undefined' && !HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.show = function show(this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    this.open = false;
+    // Real `close()` fires this, and React's onClose is bound to it.
+    this.dispatchEvent(new Event('close'));
+  };
+}
+
 afterEach(() => {
   cleanup();
 });
