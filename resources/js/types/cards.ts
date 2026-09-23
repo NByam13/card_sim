@@ -89,4 +89,18 @@ export interface Deck {
    * been released. Empty for a deck that references none.
    */
   tokens: Card[];
+  /**
+   * The backs shared by every card without a unique one. A card's own
+   * `card_back_url` wins where it is not null, which is only Ruby Rare Main
+   * Characters and the BP02 story backs.
+   *
+   * Sent rather than built, because the art sits in a bucket that can move and
+   * whose file names follow no pattern this app can see. Optional only until
+   * PonyRec ships it (NByam13/kayou_structured#170); a snapshot without it
+   * draws a blank back, which `cardBack` handles.
+   */
+  card_backs?: {
+    scene: string;
+    generic: string;
+  };
 }
