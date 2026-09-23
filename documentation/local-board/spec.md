@@ -1,6 +1,6 @@
 # Local Board: Spec
 
-**Status:** Not started
+**Status:** Built. Both PRs landed on the branch; manual verification outstanding.
 **Branch:** `feat/local-board`
 **Last updated:** 2026-09-23
 
@@ -86,6 +86,22 @@ already is.
 
 Image URLs are used exactly as returned and never derived, per the contract.
 
+### Two things a table needs that the deck endpoint did not send
+
+Both were found by porting, and both are now fields on
+`GET /api/decks/{code}` (NByam13/kayou_structured#170). The rule they share is
+the contract's own: a consumer constructs no image URL and hard-codes no card
+fact, so anything it cannot derive has to arrive in the response.
+
+**`card_backs`.** `card_back_url` is null for every card whose back is not
+unique, which is nearly all of them, so a table turning a Plan face down had
+nothing to draw. PonyRec's board calls `sharedBackUrl()`, which builds the path
+from the image root — fine inside PonyRec, and exactly the rule-break the seam
+exists to prevent out here. A hard-coded back would work until the art moved and
+then fail silently.
+
+**`copy_key`**, below.
+
 ### `copyKey` cannot be ported faithfully — and that is a contract gap
 
 PonyRec's `copyKey` is `replace(printed_number || card_number, '※', '')`. `printed_number` is what
@@ -102,12 +118,16 @@ and skips the float.
 - **The fix belongs on PonyRec**, not here. `printed_number` already survives `CardPool`'s column
   pruning with the comment "client copyKey", so the field exists and is meant for exactly this
   consumer; the deck endpoint simply omitted it. Adding it is one field and one line of contract.
-- **Until then**, this app derives the base printing from the `variant` object the contract *does*
-  return: an `art` variant's trailing letter is stripped, everything else is `card_number` minus
-  the ※. That reproduces `copyKey` for every case the endpoint describes, and it is commented as a
-  stand-in with the PonyRec-side fix named, so it is removed rather than forgotten.
+- **Resolved** by sending `copy_key` itself rather than `printed_number`: the latter keeps the ※
+  marker while the key strips it, so every consumer would have to learn that quirk and redo the
+  transformation. The finished answer keeps the rule owned in one place.
+- **The fallback stays** for snapshots taken before the field existed. It gets the shining and
+  art-variant cases right and **promos wrong** — an alt-art promo carries no `variant` and keeps
+  its `-P` suffix — which is precisely why the field was needed. Commented as a stand-in, to be
+  deleted once no stored snapshot predates it.
 
-Tracked in Open questions.
+One correction to the original reading: `copyKey` collapses promos as well as art variants, so the
+variant-derived stand-in was always a worse approximation than it first appeared.
 
 ### The deal reads the snapshot, and the server stays out of it
 
@@ -154,7 +174,13 @@ the first PR.
 | --- | --- | --- |
 | `vitest`, `jsdom` | The ported unit suites | PonyRec runs the same pair from a `vitest.config.ts` kept separate from the Vite config so the Laravel plugin does not load under test. Same arrangement here. |
 | `@testing-library/react`, `@testing-library/dom`, `@testing-library/jest-dom`, `@testing-library/user-event` | (b) only | Not needed for the model PR. |
-| `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` | (b) only | What the board's drag and drop is built on. |
+| `@dnd-kit/core` | (b) only | What the board's drag and drop is built on. `sortable` and `utilities` turned out not to be needed — PonyRec does not use them either. |
+
+Deliberately **not** added: a component library for the pile viewer's modal. PonyRec's `Modal` is
+built on Headless UI, which would have become this app's largest frontend dependency, bought for
+one screen. This app's is built on `<dialog>`, which brings the focus trap, the backdrop and Escape
+from the platform. jsdom implements none of that, so the test setup stubs it beside the
+`ResizeObserver` and `elementFromPoint` stubs already there.
 
 The React Compiler stays **off**, per the PvP spec: the board assigns refs during render and the
 compiler breaks that silently.
@@ -171,17 +197,25 @@ resources/js/board/
   setup.ts          shuffle, the deal, arrangeSceneDeck
   useGame.ts        the reducer and its hook
   mlp.ts            copyKey / storyStageRank — the MLP domain bits the deal borrows
+  fan.ts selection.ts hoverTarget.ts randomizers.ts zoom.ts useMarquee.ts
+  shortcuts.ts useBoardShortcuts.ts
+  context.ts        what a card reaches without a prop threaded through every Zone
+  components/       the generic table: card, zone, hand, pile, menu, shell, arena
+  mlp/MlpTable.tsx  where the MLP zones sit, and what its piles offer
 ```
 
-`types/cards.ts` gets this app's `Card`.
+`types/cards.ts` gets this app's `Card`; `components/Modal.tsx` is the app's own.
+
+The `board/` and `board/mlp/` split is the shape of the eventual setup seam made visible. The seam
+itself is still not built — `ZoneId` is still MLP's union, and `MlpTable` is imported by name rather
+than selected by `game.setup`.
 
 ## Open questions
 
-- **Will PonyRec add `printed_number` to the deck endpoint?** It is one field, the data already
-  exists and is already annotated as being for this consumer, and it removes a stand-in here. Until
-  it lands, the variant-derived fallback stands.
-- **Does the board belong on `games/show.tsx` or its own route?** The lobby and the table are
-  different enough that one page doing both may read badly, but splitting them means a second route
-  that has to re-derive the seat. Deferred to (b), where there is something to look at.
+- **Does the board belong on `games/show.tsx` or its own route?** It is on `games/show.tsx`, which
+  now renders the lobby or the table depending on whether you hold a seat. That reads fine so far
+  and costs no second route to re-derive the seat in, but it has only been looked at by one person.
+- **What does a watcher see?** The lobby, for now. There is no board to mirror until the sync
+  slice, and showing them an empty table would be worse than showing them the room.
 - **What does "restart" mean once there are two seats?** Solo it re-deals. With an opponent it is
   either a desync or a rematch, and that is the sync slice's problem. Ported as-is for now.
