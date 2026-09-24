@@ -41,6 +41,12 @@ class Game extends Model
         'guest_deck_code',
         'host_deck',
         'guest_deck',
+        'host_state',
+        'guest_state',
+        'host_public_state',
+        'guest_public_state',
+        'host_seq',
+        'guest_seq',
         'last_activity_at',
     ];
 
@@ -64,6 +70,12 @@ class Game extends Model
         return [
             'host_deck' => 'array',
             'guest_deck' => 'array',
+            'host_state' => 'array',
+            'guest_state' => 'array',
+            'host_public_state' => 'array',
+            'guest_public_state' => 'array',
+            'host_seq' => 'integer',
+            'guest_seq' => 'integer',
             'last_activity_at' => 'datetime',
         ];
     }
@@ -162,6 +174,26 @@ class Game extends Model
         $deck = $this->deckFor($seat);
 
         return is_string($deck['name'] ?? null) ? $deck['name'] : null;
+    }
+
+    /**
+     * The board a seat last saved, or null before it has saved one.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function stateFor(string $seat): ?array
+    {
+        return $this->{"{$seat}_state"};
+    }
+
+    /**
+     * The redacted board a seat last saved, to seed the other side's mirror.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function publicStateFor(string $seat): ?array
+    {
+        return $this->{"{$seat}_public_state"};
     }
 
     public function touchActivity(): void

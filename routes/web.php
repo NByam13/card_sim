@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\BoardSyncController;
+use App\Http\Controllers\CardController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
 use Illuminate\Support\Facades\Route;
@@ -19,3 +21,13 @@ Route::post('/games/{game}/join', [GameController::class, 'join'])
     ->name('games.join');
 
 Route::delete('/games/{game}', [GameController::class, 'destroy'])->name('games.destroy');
+
+// A seat's board, leaving the browser. Both derive the seat from the session.
+Route::post('/games/{game}/sync', [BoardSyncController::class, 'relay'])->name('games.sync');
+Route::post('/games/{game}/state', [BoardSyncController::class, 'save'])->name('games.state');
+
+// Cards a mirror meets that its own deck does not carry. `where` so a number
+// containing a dot still routes.
+Route::get('/cards/{number}', [CardController::class, 'show'])
+    ->where('number', '.*')
+    ->name('cards.show');
