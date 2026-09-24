@@ -1,4 +1,8 @@
 import { destroy } from '@/actions/App/Http/Controllers/GameController';
+import BoardArena from '@/board/components/BoardArena';
+import ZoomControls from '@/board/components/ZoomControls';
+import { usePersistentZoom } from '@/board/zoom';
+import { Deck } from '@/types/cards';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
@@ -18,6 +22,8 @@ interface Game {
   status: 'waiting' | 'active' | 'finished';
   seats: Record<Seat, SeatState>;
   you: Seat | null;
+  /** This seat's own deck snapshot, to deal its board from. Null for a watcher. */
+  deck: Deck | null;
 }
 
 interface Member {
@@ -35,15 +41,44 @@ interface Props {
 }
 
 /**
- * A game before play starts: who is seated, who is here, and the link that
- * brings the second player in.
+ * A game: the lobby until the table is worth showing, then your half of it.
+ *
+ * Holding a seat is not on its own enough to be sent to the board. A host who
+ * has just opened a game still has to send the link, and the lobby is the only
+ * place that offers it — dropping them straight onto the table stranded them
+ * there with no invite and no way to cancel. So the lobby stays until the
+ * second seat is taken, and a player who would rather not wait says so.
+ *
+ * A watcher stays on the lobby regardless — there is nothing to show them until
+ * the sync slice gives them a board to mirror.
  */
 export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Props) {
   const [cancelled, setCancelled] = useState(false);
+  // Not persisted, on purpose: a refresh re-deals the board anyway (no
+  // persistence in this slice), so there is no table to come back to and
+  // landing on the lobby is the honest result of reloading.
+  const [solo, setSolo] = useState(false);
 
   // Stable, so the channel's handlers are bound once rather than on every
   // render of this page.
   const onCancelled = useCallback(() => setCancelled(true), []);
+
+  // The opponent arriving is itself a reason to show the table: the lobby's one
+  // job was filling that seat. `seat.claimed` follows the row, not presence, so
+  // this does not flap when they close a tab.
+  const seated = game.seats.guest.claimed;
+
+  if (!cancelled && seat && game.deck && (seated || solo)) {
+    return (
+      <Playing
+        game={game}
+        seat={seat}
+        deck={game.deck}
+        onCancelled={onCancelled}
+        onWaitingRoom={seated ? null : () => setSolo(false)}
+      />
+    );
+  }
 
   return (
     <>
@@ -76,9 +111,99 @@ export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Prop
 
             <InviteLink url={inviteUrl} full={!canJoin && game.seats.guest.claimed} />
             {canJoin && <JoinForm code={game.code} />}
+            {seat && game.deck && <PlaySolo onStart={() => setSolo(true)} />}
             {canCancel && <CancelGame code={game.code} />}
           </>
         )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The way onto the table before anyone else turns up.
+ *
+ * Until the sync slice there is nothing an opponent changes about your own
+ * half, so waiting for one is a courtesy rather than a requirement — you can
+ * deal and play while the seat is still open, and the invite link is a click
+ * back.
+ */
+function PlaySolo({ onStart }: { onStart: () => void }) {
+  return (
+    <section className="space-y-2 rounded border border-gray-200 p-4">
+      <h2 className="text-sm font-medium">Don&rsquo;t want to wait?</h2>
+      <p className="text-xs text-gray-500">
+        Deal your deck and play your own half now. Your opponent can still take the seat.
+      </p>
+      <button
+        type="button"
+        onClick={onStart}
+        className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+      >
+        Play solo &rarr;
+      </button>
+    </section>
+  );
+}
+
+/**
+ * Your half of the table.
+ *
+ * The board fills the screen rather than sitting inside the lobby's column: it
+ * is the page now, and the lobby's chrome would cost height the table needs.
+ * The presence strip rides along in the header, which the shell scrolls.
+ */
+function Playing({
+  game,
+  seat,
+  deck,
+  onCancelled,
+  onWaitingRoom,
+}: {
+  game: Game;
+  seat: Seat;
+  deck: Deck;
+  onCancelled: () => void;
+  /** Back to the lobby, or null once the second seat is taken and there is no lobby left to want. */
+  onWaitingRoom: (() => void) | null;
+}) {
+  const [scale, setScale] = usePersistentZoom('board', 1);
+
+  return (
+    <>
+      <Head title="Your game" />
+      <div className="flex h-screen flex-col">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
+          <Link href="/" className="text-xs font-semibold tracking-widest text-gray-500 uppercase">
+            Everfree Arena
+          </Link>
+          <div className="flex items-center gap-4">
+            {/* The invite link and the cancel button live in the lobby, so while
+                the seat is open there has to be a way back to it. Leaving the
+                board costs the deal, which is why it says so. */}
+            {onWaitingRoom && (
+              <button
+                type="button"
+                onClick={onWaitingRoom}
+                title="The invite link and cancel live here. Your board is re-dealt when you come back."
+                className="text-xs font-medium text-gray-500 underline hover:text-gray-900"
+              >
+                Waiting room
+              </button>
+            )}
+            <ZoomControls scale={scale} onChange={setScale} />
+          </div>
+        </div>
+
+        <BoardArena
+          deck={deck}
+          scale={scale}
+          header={
+            <div className="mb-3">
+              <Table key={seat} game={game} seat={seat} onCancelled={onCancelled} />
+            </div>
+          }
+        />
       </div>
     </>
   );

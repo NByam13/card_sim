@@ -1,0 +1,278 @@
+# Local Board: Spec
+
+**Status:** Built. Both PRs landed on the branch; in manual review.
+**Branch:** `feat/local-board`
+**Last updated:** 2026-09-24
+
+## Summary
+
+The table itself, for one seat, playing alone. A player who holds a seat opens their game and sees
+their own half of the MLP board, dealt from the deck snapshot already on the row, and can move
+cards around it: drag, multi-select, zoom, tap, flip, draw, shuffle, mulligan, take a turn. The
+opponent's half is not rendered, nothing is broadcast, and nothing is saved.
+
+This is the second piece of the PvP decoupling and the largest. The lobby it sits on is
+[`../anonymous-games/spec.md`](../anonymous-games/spec.md); the plan it serves and the audit that
+sizes it are `documentation/pvp-decoupling/{spec,board-audit}.md` in the PonyRec repo.
+
+## Goals
+
+- A seat holder sees their deck dealt onto the MLP table and can play it, alone, end to end.
+- The board's behaviour matches PonyRec's playtest board action for action, including the edge
+  cases its unit tests pin down.
+- The ported unit suites run here and pass, so the sync slice that follows has a safety net.
+- No server surface is added. The deal reads the snapshot the lobby already stored.
+
+## Non-goals for this slice
+
+The opponent's half of the table, in any form: no mirror, no redaction, no snapshot frames, no
+broadcasting. No persistence — a refresh re-deals. No turn order, no shared turn cursor, no phase
+track, no scoring, no win claim, no spectators, no tutorial, no contact hint.
+
+And, explicitly, **no setup abstraction.** See below.
+
+## Decisions on record
+
+### Parity first: the board arrives still typed against MLP
+
+Inherited from the PvP spec's "Port to parity first, then generalise", and restated here because
+it is the decision this slice is most likely to be talked out of.
+
+The board comes over with `ZoneId` as MLP's union, Plans and Story stages and Adventure lanes
+named in the types, and `useGame`'s MLP actions intact. The setup-module design in the audit —
+zones as data, `setup.deal(deck)`, composed actions — is **not** built yet.
+
+- **Why:** generalising during the move rewrites ~5,200 lines with nothing working to compare
+  against. Porting first means every behavioural difference is a bug against a running reference,
+  and the ported tests say so.
+- **What it costs:** a second pass over the same files later. Accepted knowingly; the audit already
+  priced it.
+- **When the seam gets built:** after two browsers play a full match here, with the sync and
+  scoring slices' tests in place. That is the same milestone that lets `pvp` switch off on
+  PonyRec.
+
+### Split in two PRs: the model, then the table
+
+The slice is too big for one reviewable change, and it has a clean joint: everything below the
+React tree is pure, and everything above it is layout.
+
+**(a) The game model.** `types.ts`, `setup.ts`, `useGame.ts`, and the MLP domain helpers the deal
+borrows. Pure TypeScript, no components, no page changes. It lands with the ported unit suites —
+`useGame.test.ts` (872 lines), `setup.test.ts` (273) — which is what makes it reviewable: the tests
+are the specification of what was ported, and they pass or they do not.
+
+**(b) The table.** The DnD context, zones, the card, the hand fan, marquee selection, the card
+menu, keyboard shortcuts, the zone viewers, the board shell and the MLP layout. Mounted on
+`games/show.tsx` behind the seat the page already derives.
+
+Nothing in (a) imports React beyond `useReducer`, so (a) can merge and sit unused without holding
+anything up.
+
+### The card type is the deck endpoint's card, not PonyRec's
+
+PonyRec's `Card` is its whole catalogue model — rarity axes, keywords, effects, tags, a
+`triggerRegistry` import from the pipeline. None of that crosses the seam and none of it belongs
+here.
+
+This app's `Card` is exactly the card object in `documentation/deck-lookup-api/api.md`:
+`card_number`, `name`, `subtype`, `rarity`, `set_code`, `harmony_cost`, `inspiration`,
+`story_stage`, `card_text`, `image_url`, `thumb_url`, `card_back_url`, `release_status`,
+`variant`. Nothing more, and specifically **no `id`** — `card_number` is the identity, and no PonyRec primary key
+crosses the seam.
+
+This is not yet the audit's generic card (which drops `inspiration` and `story_stage` into
+setup-named stats). It is the parity-port card: MLP-shaped, but only as MLP-shaped as the wire
+already is.
+
+Image URLs are used exactly as returned and never derived, per the contract.
+
+### Two things a table needs that the deck endpoint did not send
+
+Both were found by porting, and both are now fields on
+`GET /api/decks/{code}` (NByam13/kayou_structured#170). The rule they share is
+the contract's own: a consumer constructs no image URL and hard-codes no card
+fact, so anything it cannot derive has to arrive in the response.
+
+**`card_backs`.** `card_back_url` is null for every card whose back is not
+unique, which is nearly all of them, so a table turning a Plan face down had
+nothing to draw. PonyRec's board calls `sharedBackUrl()`, which builds the path
+from the image root — fine inside PonyRec, and exactly the rule-break the seam
+exists to prevent out here. A hard-coded back would work until the art moved and
+then fail silently.
+
+**`copy_key`**, below.
+
+### `copyKey` cannot be ported faithfully — and that is a contract gap
+
+PonyRec's `copyKey` is `replace(printed_number || card_number, '※', '')`. `printed_number` is what
+collapses Day/Night art variants onto one base printing: `Card::copyKey()` reads it precisely when
+`variant_kind === 'art'`. **The deck endpoint does not return `printed_number`.**
+
+Only one thing here reads `copyKey`: `arrangeSceneDeck`'s test for "is every card in the Scene Deck
+the same base printing", which decides whether shining printings float to the top. Without
+`printed_number`, a Scene Deck of fifteen Day/Night variants of one scene reads as many printings
+and skips the float.
+
+- **The failure is graceful** — the deck just shuffles and stops, which is what a multi-printing
+  Scene Deck does anyway. Nothing breaks.
+- **The fix belongs on PonyRec**, not here. `printed_number` already survives `CardPool`'s column
+  pruning with the comment "client copyKey", so the field exists and is meant for exactly this
+  consumer; the deck endpoint simply omitted it. Adding it is one field and one line of contract.
+- **Resolved** by sending `copy_key` itself rather than `printed_number`: the latter keeps the ※
+  marker while the key strips it, so every consumer would have to learn that quirk and redo the
+  transformation. The finished answer keeps the rule owned in one place.
+- **The fallback stays** for snapshots taken before the field existed. It gets the shining and
+  art-variant cases right and **promos wrong** — an alt-art promo carries no `variant` and keeps
+  its `-P` suffix — which is precisely why the field was needed. Commented as a stand-in, to be
+  deleted once no stored snapshot predates it.
+
+One correction to the original reading: `copyKey` collapses promos as well as art variants, so the
+variant-derived stand-in was always a worse approximation than it first appeared.
+
+### The deal reads the snapshot, and the server stays out of it
+
+`GET /games/{code}` already passes the game to the page. The deal happens in the browser, from
+`host_deck`/`guest_deck`, using the same shuffle that ships with it.
+
+- **Why client-side:** the audit's whole sync design is trusted clients each owning their half.
+  A server-side deal would be the first thing to contradict it, and it would need the rules the
+  server deliberately does not have.
+- **What this slice does not decide:** whose shuffle is authoritative when both seats deal. That
+  question belongs to the sync slice, which is where a second board first exists.
+- **The CSPRNG shuffle ports exactly.** `randomInt`'s rejection sampling, the pile shuffle, and
+  the Fisher–Yates on either side of it come over unchanged — the audit calls it out as worth
+  keeping verbatim, and its reasoning is in the comments.
+
+### A board with no deck is a real state, not an error
+
+The lobby lets a seat be claimed with any deck PonyRec serves, and the endpoint deliberately does
+not refuse an incomplete one ("a table decides what an incomplete deck means; the endpoint does
+not"). So the deal has to survive a deck with no Main Character, fewer than four Story cards, an
+empty Scene Deck and a short Main Deck.
+
+Ported behaviour: missing pieces leave their zones empty, the board still deals, and the controls
+say what is missing rather than refusing to start. PonyRec's incomplete-deck checks (50 Main, 15
+Scene, 4 Story, a Main Character) come over as advisory text.
+
+### The lobby stays until the second seat is taken
+
+Found in review. The first cut sent anyone holding a seat straight to the table, which stranded
+the host: the invite link, the join form and the cancel button all live on the lobby, and a host
+who had just opened a game could reach none of them. `canCancel` was still computed server-side
+and had nothing rendering it.
+
+The board is not what a freshly opened game is for — filling the second seat is. So:
+
+- A seat holder sees the **lobby** while the guest seat is open, and the **table** once it is
+  claimed. `seats.guest.claimed` is the gate, read off the row rather than presence, so it does
+  not flap when the opponent closes a tab.
+- **Play solo** takes a waiting player to the table early, since until the sync slice an opponent
+  changes nothing about your own half.
+- **Waiting room** on the board's top strip goes back, and disappears once the seat is taken.
+  Without it, Play solo would be a one-way door back into the same bug.
+- Solo is not persisted. A refresh re-deals the board anyway, so there is no table to return to
+  and the lobby is the honest landing.
+
+This answers the open question below: the board stays on `games/show.tsx`, but holding a seat is
+no longer what decides which half you see.
+
+### The card view, and the text PonyRec had to start sending
+
+The board wants a card detail view — large image, name, harmony cost, Inspiration, and the card's
+printed text. Everything but the text was already on the wire. The text was not on the wire at all:
+it existed only inside the card art.
+
+**The field was added to PonyRec first**, the same way `card_backs` and `copy_key` were, rather
+than shipping a view whose text panel was empty.
+
+- **It sends one composed field, `card_text`, not three raw ones.** PonyRec stores a card's text in
+  four places by subtype: a Character's abilities are rows in an `effects` table, an Event's or
+  Item's is `effect_text`, a Scene's is `inspire_effect`, a Story card's is `story_effect`. None of
+  that is a fact about the game, so none of it crosses the seam — the endpoint flattens it and this
+  app renders a string.
+- **There was no helper to reuse over there.** `CardController::cardDescription()` is a private
+  meta-description builder with a first-wins fallback chain; `CardSearchText` and
+  `DeckTokens::deckText()` compose text for search and token scanning. The per-subtype knowledge
+  lived only in PonyRec's React card detail. `App\Cards\CardText` is new and now owns it.
+- **A Character's abilities keep their triggers.** Each is led by `[Appear]` or
+  `[Activated · Cost: Tap · Adventure Zone]`, separated by a blank line, because a cost and a
+  trigger change what an ability does — an activated ability you cannot tell is activated reads as
+  though it simply happens.
+- **`{Mechanic}` braces stay in the string** and this app draws them as pills. Stripping them at
+  the source would have thrown away a distinction no consumer could recover.
+
+The view itself is `components/CardViewModal.tsx`, opened by the `v` binding and the card menu's
+View card row — both restored, having been dropped in the port for want of a page to open. It is
+deliberately not PonyRec's card page: no play rates, no archetype profile, no keyword chips. The
+three text states are distinguished, because they are different facts: text, a card that prints
+none, and a deck snapshot taken before the field existed, which says so rather than blaming the
+card.
+
+Reading a card is the one action that changes nothing, so View card is offered everywhere — in a
+pile, on a token, and on a face-down card, which is yours and which you already know.
+
+### Tests are ported, not rewritten
+
+The unit suites come over as close to verbatim as the import paths and the card type allow. Where
+a test constructs a PonyRec `Card`, it constructs this app's card instead; where it asserts on
+behaviour, it is not touched.
+
+A test that has to change to pass is a port bug until proven otherwise. The two known, allowed
+edits are the card factory and the `copyKey` stand-in above.
+
+This needs Vitest, which this app does not have. See Dependencies.
+
+## Dependencies to add
+
+None of these are in `package.json` today, and per the project's rules they need sign-off before
+the first PR.
+
+| Package | For | Notes |
+| --- | --- | --- |
+| `vitest`, `jsdom` | The ported unit suites | PonyRec runs the same pair from a `vitest.config.ts` kept separate from the Vite config so the Laravel plugin does not load under test. Same arrangement here. |
+| `@testing-library/react`, `@testing-library/dom`, `@testing-library/jest-dom`, `@testing-library/user-event` | (b) only | Not needed for the model PR. |
+| `@dnd-kit/core` | (b) only | What the board's drag and drop is built on. `sortable` and `utilities` turned out not to be needed — PonyRec does not use them either. |
+
+Deliberately **not** added: a component library for the pile viewer's modal. PonyRec's `Modal` is
+built on Headless UI, which would have become this app's largest frontend dependency, bought for
+one screen. This app's is built on `<dialog>`, which brings the focus trap, the backdrop and Escape
+from the platform. jsdom implements none of that, so the test setup stubs it beside the
+`ResizeObserver` and `elementFromPoint` stubs already there.
+
+The React Compiler stays **off**, per the PvP spec: the board assigns refs during render and the
+compiler breaks that silently.
+
+## Layout
+
+Ported into a `resources/js/board/` tree rather than PonyRec's `decks/playtest/`, since there are
+no decks in this app to be a playtest of. The `multiplayer/` and `games/` splits PonyRec needed do
+not apply yet; this slice is one directory.
+
+```
+resources/js/board/
+  types.ts          zones, CardInstance, GameState, lane numbering, orientation
+  setup.ts          shuffle, the deal, arrangeSceneDeck
+  useGame.ts        the reducer and its hook
+  mlp.ts            copyKey / storyStageRank — the MLP domain bits the deal borrows
+  fan.ts selection.ts hoverTarget.ts randomizers.ts zoom.ts useMarquee.ts
+  shortcuts.ts useBoardShortcuts.ts
+  context.ts        what a card reaches without a prop threaded through every Zone
+  components/       the generic table: card, zone, hand, pile, menu, shell, arena
+  mlp/MlpTable.tsx  where the MLP zones sit, and what its piles offer
+```
+
+`types/cards.ts` gets this app's `Card`; `components/Modal.tsx` is the app's own.
+
+The `board/` and `board/mlp/` split is the shape of the eventual setup seam made visible. The seam
+itself is still not built — `ZoneId` is still MLP's union, and `MlpTable` is imported by name rather
+than selected by `game.setup`.
+
+## Open questions
+
+- ~~**Does the board belong on `games/show.tsx` or its own route?**~~ Settled in review: one route,
+  which renders the lobby or the table depending on whether the second seat is taken. See "The
+  lobby stays until the second seat is taken".
+- **What does a watcher see?** The lobby, for now. There is no board to mirror until the sync
+  slice, and showing them an empty table would be worse than showing them the room.
+- **What does "restart" mean once there are two seats?** Solo it re-deals. With an opponent it is
+  either a desync or a rematch, and that is the sync slice's problem. Ported as-is for now.
