@@ -50,12 +50,23 @@ export function MlpGameZone({
   selection,
   setSelection,
   controls,
+  mirrored = false,
 }: {
   state: GameState;
   scale: number;
   selection: ReadonlySet<string>;
   setSelection: (next: ReadonlySet<string>) => void;
   controls: ReactNode;
+  /**
+   * Draw it as the opponent's half: the row order flips, so their Adventure
+   * lanes sit against the seam facing yours, the way two players face each
+   * other across a table.
+   *
+   * A mode rather than a second component. PonyRec keeps a hand-mirrored copy of
+   * this layout and it is the largest drift risk in that codebase — every change
+   * has to be made twice, and eventually is not.
+   */
+  mirrored?: boolean;
 }) {
   const z = (id: (typeof ADVENTURE_ZONES)[number] | Parameters<typeof laneNumber>[0]) =>
     state.zones[id];
@@ -76,7 +87,9 @@ export function MlpGameZone({
         Anchored to this box rather than the viewport, so it keeps the table's
         top-left corner whatever the board is zoomed to.
       */}
-      <SelectionChip count={selection.size} onClear={() => setSelection(EMPTY_SELECTION)} />
+      {!mirrored && (
+        <SelectionChip count={selection.size} onClear={() => setSelection(EMPTY_SELECTION)} />
+      )}
 
       {/* Left rail — the Main Character waits here, level with the Scene Zone. */}
       <div className="flex flex-col justify-around">
@@ -91,8 +104,10 @@ export function MlpGameZone({
         />
       </div>
 
-      {/* Centre: Adventure lanes → Story stages → Scene Zone. */}
-      <div className="flex flex-col justify-between space-y-3">
+      {/* Centre: Adventure lanes → Story stages → Scene Zone, reversed in a mirror. */}
+      <div
+        className={`flex justify-between space-y-3 ${mirrored ? 'flex-col-reverse' : 'flex-col'}`}
+      >
         {/*
           Lanes stay centred in the column so they will line up with the
           opponent's across the seam. The Reveal Zone lives in the right-hand

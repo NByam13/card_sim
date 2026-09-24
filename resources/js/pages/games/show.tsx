@@ -1,6 +1,13 @@
 import { destroy } from '@/actions/App/Http/Controllers/GameController';
 import BoardArena from '@/board/components/BoardArena';
+import MirrorBoard from '@/board/components/MirrorBoard';
+import { CompactGameState, expandState } from '@/board/sync/persist';
+import { PublicState } from '@/board/sync/types';
+import { useBoardRelay } from '@/board/sync/useBoardRelay';
+import { lookupCard, useGameSync } from '@/board/sync/useGameSync';
+import { useMirror } from '@/board/sync/useMirror';
 import ZoomControls from '@/board/components/ZoomControls';
+import { GameState } from '@/board/types';
 import { usePersistentZoom } from '@/board/zoom';
 import { Deck } from '@/types/cards';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -24,6 +31,10 @@ interface Game {
   you: Seat | null;
   /** This seat's own deck snapshot, to deal its board from. Null for a watcher. */
   deck: Deck | null;
+  /** This seat's board as it was last saved, so a refresh resumes it. */
+  saved_state: CompactGameState | null;
+  /** The opponent's board as they last saved it, to seed their mirror. */
+  opponent_state: PublicState | null;
 }
 
 interface Member {
@@ -49,14 +60,11 @@ interface Props {
  * there with no invite and no way to cancel. So the lobby stays until the
  * second seat is taken, and a player who would rather not wait says so.
  *
- * A watcher stays on the lobby regardless — there is nothing to show them until
- * the sync slice gives them a board to mirror.
+ * A watcher stays on the lobby regardless — they get a board of their own to
+ * mirror in the slice after this one.
  */
 export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Props) {
   const [cancelled, setCancelled] = useState(false);
-  // Not persisted, on purpose: a refresh re-deals the board anyway (no
-  // persistence in this slice), so there is no table to come back to and
-  // landing on the lobby is the honest result of reloading.
   const [solo, setSolo] = useState(false);
 
   // Stable, so the channel's handlers are bound once rather than on every
@@ -74,7 +82,6 @@ export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Prop
         game={game}
         seat={seat}
         deck={game.deck}
-        onCancelled={onCancelled}
         onWaitingRoom={seated ? null : () => setSolo(false)}
       />
     );
@@ -147,27 +154,51 @@ function PlaySolo({ onStart }: { onStart: () => void }) {
 }
 
 /**
- * Your half of the table.
+ * Your half of the table, with the opponent's above it.
  *
  * The board fills the screen rather than sitting inside the lobby's column: it
  * is the page now, and the lobby's chrome would cost height the table needs.
- * The presence strip rides along in the header, which the shell scrolls.
+ * The seat list goes with it — once two people are playing, the mirror says who
+ * is there far better than a list of two names does.
+ *
+ * This holds the page's one channel subscription while playing. The lobby's
+ * `Table` holds the other, and the two never exist at once: channels are
+ * reference-counted, so a second subscription would keep the first alive across
+ * the remount and the seat would never be re-authorized.
  */
 function Playing({
   game,
   seat,
   deck,
-  onCancelled,
   onWaitingRoom,
 }: {
   game: Game;
   seat: Seat;
   deck: Deck;
-  onCancelled: () => void;
   /** Back to the lobby, or null once the second seat is taken and there is no lobby left to want. */
   onWaitingRoom: (() => void) | null;
 }) {
   const [scale, setScale] = usePersistentZoom('board', 1);
+  const opponent = seat === 'host' ? 'guest' : 'host';
+  // Relaying is pointless with nobody to relay to, and the endpoint refuses it
+  // until the game is active anyway.
+  const seated = game.seats[opponent].claimed;
+
+  const { publish, announce } = useBoardRelay({ code: game.code, enabled: seated });
+  const { mirror, receive } = useMirror(lookupCard, game.opponent_state);
+  const { opponentPresent } = useGameSync({
+    code: game.code,
+    seat,
+    onFrame: receive,
+    onAnnounce: announce,
+  });
+
+  // The saved board is resolved once, against the deck it was dealt from. A card
+  // that no longer resolves means the deck changed, and `expandState` returns
+  // null so the board deals fresh rather than restoring half of one.
+  const [restored] = useState<GameState | null>(() =>
+    game.saved_state ? expandState(game.saved_state, deck) : null
+  );
 
   return (
     <>
@@ -179,13 +210,12 @@ function Playing({
           </Link>
           <div className="flex items-center gap-4">
             {/* The invite link and the cancel button live in the lobby, so while
-                the seat is open there has to be a way back to it. Leaving the
-                board costs the deal, which is why it says so. */}
+                the seat is open there has to be a way back to it. */}
             {onWaitingRoom && (
               <button
                 type="button"
                 onClick={onWaitingRoom}
-                title="The invite link and cancel live here. Your board is re-dealt when you come back."
+                title="The invite link and cancel live here."
                 className="text-xs font-medium text-gray-500 underline hover:text-gray-900"
               >
                 Waiting room
@@ -198,10 +228,20 @@ function Playing({
         <BoardArena
           deck={deck}
           scale={scale}
+          savedState={restored}
+          onState={publish}
           header={
-            <div className="mb-3">
-              <Table key={seat} game={game} seat={seat} onCancelled={onCancelled} />
-            </div>
+            seated ? (
+              <div className="mb-3">
+                <MirrorBoard
+                  state={mirror}
+                  scale={scale}
+                  backs={deck.card_backs ?? null}
+                  name={game.seats[opponent].name ?? (opponent === 'host' ? 'Host' : 'Guest')}
+                  present={opponentPresent}
+                />
+              </div>
+            ) : undefined
           }
         />
       </div>

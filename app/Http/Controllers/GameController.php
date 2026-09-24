@@ -149,6 +149,11 @@ class GameController extends Controller
             'you' => $seat,
             // Null for a watcher, who has no board of their own to deal.
             'deck' => $seat ? $game->deckFor($seat) : null,
+            'saved_state' => $seat ? $game->stateFor($seat) : null,
+            // The opponent's redacted board, so their mirror is not blank until
+            // they next move. Already stripped of everything hidden by the
+            // browser that saved it; this only passes it on.
+            'opponent_state' => $seat ? $game->publicStateFor($game->opposingSeat($seat)) : null,
         ];
     }
 }

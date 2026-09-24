@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core';
 import { CSSProperties, ReactNode } from 'react';
-import { useBoardZoom } from '../context';
+import { useBoardReadOnly, useBoardZoom } from '../context';
 import { CardInstance, ZoneId } from '../types';
 import BoardCard from './BoardCard';
 import { BASE_WIDTH } from './CardFace';
@@ -77,7 +77,8 @@ export default function Zone({
   /** Inline styles — e.g. zoom-driven minimum dimensions on Adventure lanes. */
   style?: CSSProperties;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+  const readOnly = useBoardReadOnly();
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: readOnly });
   const scale = useBoardZoom();
 
   if (bare) {

@@ -166,6 +166,50 @@ class BoardSyncTest extends TestCase
         $this->assertTrue($game->fresh()->last_activity_at->isAfter(now()->subMinute()));
     }
 
+    public function test_a_seat_is_given_its_own_saved_board_back(): void
+    {
+        $game = $this->activeGame();
+        $game->forceFill(['host_state' => ['zones' => ['hand' => [['uid' => 'mine']]]]])->save();
+
+        $this->asHost($game)
+            ->get("/games/{$game->code}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('game.saved_state.zones.hand.0.uid', 'mine'));
+    }
+
+    /**
+     * The opponent's *redacted* board and never their whole one: that is their
+     * hand, and the saved pair exists precisely so this can be handed over.
+     */
+    public function test_a_seat_is_given_only_the_opponents_redacted_board(): void
+    {
+        $game = $this->activeGame();
+        $game->forceFill([
+            'guest_state' => ['zones' => ['hand' => [['uid' => 'secret', 'cardNumber' => 'TEST-C01']]]],
+            'guest_public_state' => ['counts' => ['hand' => 1], 'zones' => []],
+        ])->save();
+
+        $response = $this->asHost($game)->get("/games/{$game->code}")->assertOk();
+
+        $response->assertInertia(fn ($page) => $page->where('game.opponent_state.counts.hand', 1));
+        $this->assertStringNotContainsString('secret', $response->getContent());
+    }
+
+    public function test_a_watcher_is_given_neither_board(): void
+    {
+        $game = $this->activeGame();
+        $game->forceFill([
+            'host_state' => ['zones' => []],
+            'host_public_state' => ['counts' => []],
+        ])->save();
+
+        $this->get("/games/{$game->code}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('game.saved_state', null)
+                ->where('game.opponent_state', null));
+    }
+
     /** @return array<string, array{0: array<string, mixed>}> */
     public static function badFrames(): array
     {
