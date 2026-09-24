@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useBoardDispatch, useBoardPlanSlot, useBoardTokens } from '../context';
+import { useBoardCardView, useBoardDispatch, useBoardPlanSlot, useBoardTokens } from '../context';
 import { MENU_HINTS } from '../shortcuts';
 import {
   ADVENTURE_ZONES,
@@ -44,11 +44,13 @@ interface Props {
 /**
  * Right-click / ⋮ menu of per-card actions.
  *
- * Ported from PonyRec's `CardContextMenu.tsx`, less its "View card" row: that
- * opened a card detail page this app does not have.
+ * Ported from PonyRec's `CardContextMenu.tsx`. Its "View card" row opened a card
+ * detail page; here it opens a dialog over the board, which is what a player
+ * mid-game wanted from it anyway.
  */
 export default function CardContextMenu({ instance, zone, x, y, onClose }: Props) {
   const dispatch = useBoardDispatch();
+  const viewCard = useBoardCardView();
   const planSlotAvailable = useBoardPlanSlot() !== null;
   const tokens = useBoardTokens();
   const { uid } = instance;
@@ -169,6 +171,11 @@ export default function CardContextMenu({ instance, zone, x, y, onClose }: Props
         // come down to portal mount order.
         className="fixed z-60 min-w-45 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-xl"
       >
+        {/* Reading the card. First, and the only row offered unconditionally: it
+            changes nothing, and it means the same in a pile, on a token and on a
+            card lying face down — which is yours, and which you already know. */}
+        {item('View card', () => viewCard(instance.card), MENU_HINTS.view)}
+        <div className="my-1 border-t border-gray-100" />
         {/* Everything about how the card sits on the board, which is meaningless
                 for one lying in a pile and for a token, which has no such state. */}
         {!inPile && !token && (

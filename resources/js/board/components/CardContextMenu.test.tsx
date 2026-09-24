@@ -1,12 +1,12 @@
 import { Card } from '@/types/cards';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, Mock, vi } from 'vitest';
-import { BoardDispatchProvider, BoardTokensProvider } from '../context';
+import { BoardCardViewProvider, BoardDispatchProvider, BoardTokensProvider } from '../context';
 import { CardInstance, ZoneId } from '../types';
 import { Action } from '../useGame';
 import CardContextMenu from './CardContextMenu';
 
-/** Ported from PonyRec's `CardContextMenu.test.tsx`, less its View card row. */
+/** Ported from PonyRec's `CardContextMenu.test.tsx`. */
 
 const instance: CardInstance = {
   uid: 'card-1',
@@ -29,13 +29,20 @@ const itemInstance: CardInstance = {
 
 function menu(
   zone: ZoneId,
-  { tokens = [], on = instance, dispatch = vi.fn<(action: Action) => void>() }: MenuOptions = {}
+  {
+    tokens = [],
+    on = instance,
+    dispatch = vi.fn<(action: Action) => void>(),
+    onViewCard = vi.fn<(card: Card) => void>(),
+  }: MenuOptions = {}
 ) {
   render(
     <BoardDispatchProvider value={dispatch}>
-      <BoardTokensProvider value={tokens}>
-        <CardContextMenu instance={on} zone={zone} x={0} y={0} onClose={() => {}} />
-      </BoardTokensProvider>
+      <BoardCardViewProvider value={onViewCard}>
+        <BoardTokensProvider value={tokens}>
+          <CardContextMenu instance={on} zone={zone} x={0} y={0} onClose={() => {}} />
+        </BoardTokensProvider>
+      </BoardCardViewProvider>
     </BoardDispatchProvider>
   );
   return dispatch;
@@ -47,6 +54,7 @@ interface MenuOptions {
   /** The card the menu was opened on. Defaults to an ordinary Character. */
   on?: CardInstance;
   dispatch?: Mock<(action: Action) => void>;
+  onViewCard?: Mock<(card: Card) => void>;
 }
 
 /** The row's whole button, so its keyboard hint chip comes with it. */
@@ -55,6 +63,33 @@ function row(label: string): HTMLElement {
 }
 
 describe('CardContextMenu', () => {
+  it('opens the card view with the card the menu was opened on', () => {
+    const onViewCard = vi.fn<(card: Card) => void>();
+    menu('adventureC', { onViewCard });
+
+    fireEvent.click(row('View card'));
+
+    expect(onViewCard).toHaveBeenCalledWith(instance.card);
+  });
+
+  it('hints v on View card', () => {
+    menu('adventureC');
+    expect(row('View card')).toHaveTextContent('v');
+  });
+
+  it.each<ZoneId>(['adventureC', 'hand', 'retire', 'library'])(
+    'offers View card in %s, where reading the card always means the same thing',
+    (zone) => {
+      menu(zone);
+      expect(screen.queryByText('View card')).toBeInTheDocument();
+    }
+  );
+
+  it('offers View card on a token, which has no other rows but Remove', () => {
+    menu('adventureC', { on: tokenInstance });
+    expect(screen.queryByText('View card')).toBeInTheDocument();
+  });
+
   it('hints r on Retire for a card in an Adventure lane', () => {
     menu('adventureC');
     expect(row('Retire')).toHaveTextContent('r');
@@ -133,13 +168,17 @@ describe('CardContextMenu', () => {
     });
   });
 
-  it('offers a token nothing but removing it', () => {
+  it('offers a token nothing but reading it and removing it', () => {
     // A token is never tapped or turned face down, has no printed Inspiration and
-    // carries no counters, and was never in a deck it could go back to.
+    // carries no counters, and was never in a deck it could go back to. Reading it
+    // is the one thing that still means something, since it is a real card.
     const dispatch = menu('adventureC', { tokens: [CANDY], on: tokenInstance });
 
     expect(row('Remove token')).toHaveTextContent('r');
-    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'View cardv',
+      'Remove tokenr',
+    ]);
 
     fireEvent.click(screen.getByText('Remove token'));
     expect(dispatch).toHaveBeenCalledWith({ type: 'REMOVE_CARD', uid: 'token-1' });

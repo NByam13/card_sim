@@ -103,6 +103,23 @@ export function useBoardFocus(): BoardFocus {
 }
 
 /**
+ * Open the card detail view on a card. Provided by the board, which owns the
+ * dialog, and called from a card's context menu and the `v` shortcut.
+ *
+ * Its own context rather than part of `BoardFocus`: that one is about which card
+ * the keyboard is aimed at, and this is about a surface opening over the board.
+ * The default no-op means a card rendered outside a board (a test, the drag
+ * overlay) simply offers nothing rather than throwing.
+ */
+const BoardCardViewContext = createContext<(card: Card) => void>(() => {});
+
+export const BoardCardViewProvider = BoardCardViewContext.Provider;
+
+export function useBoardCardView(): (card: Card) => void {
+  return useContext(BoardCardViewContext);
+}
+
+/**
  * The tokens this deck can spawn (`Deck.tokens`), provided by the board and read
  * by a lane card's context menu. Empty for a deck that references none, and the
  * menu then offers no token row at all.

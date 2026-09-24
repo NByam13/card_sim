@@ -42,6 +42,7 @@ function setup(overrides: Partial<Parameters<typeof useBoardShortcuts>[0]> = {})
     onTopCardToPlan: vi.fn(),
     onPromoteStage: vi.fn(),
     onToggleHelp: vi.fn(),
+    onViewCard: vi.fn(),
   };
   const options = {
     state: gameState({ adventureL: [inst('card-1')] }),
@@ -636,5 +637,39 @@ describe('resolveTargets', () => {
     expect(resolveTargets(state, 's1', null, new Set(['gone'])).map((t) => t.instance.uid)).toEqual(
       ['s1']
     );
+  });
+
+  describe('v', () => {
+    it('views the hovered card', () => {
+      const { onViewCard } = setup({ hovered: 'card-1' });
+      press('v');
+      expect(onViewCard).toHaveBeenCalledTimes(1);
+    });
+
+    it('views the card whose menu is open when nothing is hovered', () => {
+      const { onViewCard } = setup({ hovered: null, selected: 'card-1' });
+      press('v');
+      expect(onViewCard).toHaveBeenCalledTimes(1);
+    });
+
+    it('views one card even with a selection live, since a view shows one card', () => {
+      const state = gameState({ adventureL: [inst('card-1'), inst('card-2'), inst('card-3')] });
+      const { onViewCard } = setup({
+        state,
+        hovered: 'card-2',
+        selection: new Set(['card-1', 'card-2', 'card-3']),
+      });
+
+      press('v');
+
+      expect(onViewCard).toHaveBeenCalledTimes(1);
+      expect(onViewCard).toHaveBeenCalledWith(state.zones.adventureL[1].card);
+    });
+
+    it('does nothing with no card under the cursor', () => {
+      const { onViewCard } = setup({ hovered: null, selected: null });
+      press('v');
+      expect(onViewCard).not.toHaveBeenCalled();
+    });
   });
 });

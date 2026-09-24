@@ -106,6 +106,8 @@ export interface BoardShortcutOptions {
   onTopCardToPlan: () => void;
   onPromoteStage: () => void;
   onToggleHelp: () => void;
+  /** Open the card detail view. Given one card, never a selection — see `v`. */
+  onViewCard: (card: CardInstance['card']) => void;
   /** Suppressed while a modal owns the screen (a hidden pile's viewer, a card detail). */
   enabled: boolean;
   /**
@@ -120,8 +122,7 @@ export interface BoardShortcutOptions {
 /**
  * Bind the board's keyboard shortcuts to the window.
  *
- * Ported from PonyRec's `useBoardShortcuts.ts`. Two bindings did not come over:
- * `v` (View card), which opened a card detail page this app does not have, and
+ * Ported from PonyRec's `useBoardShortcuts.ts`. One binding did not come over:
  * Shift+Space (step back), which walks a shared turn track that arrives with the
  * turn-order slice.
  *
@@ -145,6 +146,7 @@ export function useBoardShortcuts({
   onTopCardToPlan,
   onPromoteStage,
   onToggleHelp,
+  onViewCard,
   enabled,
   scope = 'all',
 }: BoardShortcutOptions): void {
@@ -255,6 +257,17 @@ export function useBoardShortcuts({
           }
           return;
         }
+        case 'v': {
+          // The one card key that ignores a selection: a detail view shows one
+          // card, and "view these nine" has no meaning. Resolved the same way
+          // the single-card path always is, so hovering and right-clicking both
+          // aim it. A face-down card is still yours to read — you know what you
+          // put there — so this does not check `faceDown` the way the hover
+          // preview does.
+          const target = findInstance(state, hovered) ?? findInstance(state, selected);
+          if (target) onViewCard(target.instance.card);
+          return;
+        }
         case 'z':
           // Back to the card's printed value. This is the counterpart to clicking
           // the inspiration badge, which only ever counts up.
@@ -296,6 +309,7 @@ export function useBoardShortcuts({
     onTopCardToPlan,
     onPromoteStage,
     onToggleHelp,
+    onViewCard,
     scope,
   ]);
 }

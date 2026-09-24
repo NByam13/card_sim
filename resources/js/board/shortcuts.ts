@@ -5,9 +5,9 @@
  * chip next to any action that appears here — so a binding can never be added to
  * the handler without showing up in both places.
  *
- * Ported from PonyRec's `shortcuts.ts`, less `v` (View card): that opened a card
- * detail page this app does not have. The hover preview already enlarges a card,
- * so nothing is lost until there is a page to open.
+ * Ported from PonyRec's `shortcuts.ts`. `v` came over late: PonyRec's opened a
+ * card detail page this app does not have, and it waited for the deck endpoint
+ * to send `card_text` so there was something to open instead.
  */
 export interface Shortcut {
   /** The key as the user presses it (also what the hint chip displays). */
@@ -31,6 +31,9 @@ export const SHORTCUTS: readonly Shortcut[] = [
   // Numbered by the lane labels, which reverse when you are on the draw.
   { key: '1 2 3', label: 'Play to Adventure Lane 1 / 2 / 3', scope: 'card' },
   { key: 'z', label: 'Reset inspiration', scope: 'card' },
+  // Singular where the other card keys are plural: you read one card at a time,
+  // so this one ignores a multi-selection. See useBoardShortcuts.
+  { key: 'v', label: 'View the card under the cursor', scope: 'card' },
   { key: 'x', label: 'Promote Main Character a stage', scope: 'board' },
   { key: 'p', label: 'Top of deck to Plan', scope: 'board' },
   { key: 'Space', label: 'Next turn', scope: 'board' },
@@ -58,6 +61,7 @@ export const MENU_HINTS = {
   removeToken: 'r',
   toHand: 'h',
   resetInspiration: 'z',
+  view: 'v',
   // The deck piles' own menus. `p` plans the top of the deck, which is what the
   // Library pile's row does — but NOT what the card menu's "To Plan" row does
   // (that one tucks the hand card you right-clicked), so the two are separate

@@ -1,8 +1,8 @@
 # Local Board: Spec
 
-**Status:** Built. Both PRs landed on the branch; manual verification outstanding.
+**Status:** Built. Both PRs landed on the branch; in manual review.
 **Branch:** `feat/local-board`
-**Last updated:** 2026-09-23
+**Last updated:** 2026-09-24
 
 ## Summary
 
@@ -76,8 +76,8 @@ here.
 
 This app's `Card` is exactly the card object in `documentation/deck-lookup-api/api.md`:
 `card_number`, `name`, `subtype`, `rarity`, `set_code`, `harmony_cost`, `inspiration`,
-`story_stage`, `image_url`, `thumb_url`, `card_back_url`, `release_status`, `variant`. Nothing
-more, and specifically **no `id`** — `card_number` is the identity, and no PonyRec primary key
+`story_stage`, `card_text`, `image_url`, `thumb_url`, `card_back_url`, `release_status`,
+`variant`. Nothing more, and specifically **no `id`** — `card_number` is the identity, and no PonyRec primary key
 crosses the seam.
 
 This is not yet the audit's generic card (which drops `inspiration` and `story_stage` into
@@ -154,6 +154,63 @@ Ported behaviour: missing pieces leave their zones empty, the board still deals,
 say what is missing rather than refusing to start. PonyRec's incomplete-deck checks (50 Main, 15
 Scene, 4 Story, a Main Character) come over as advisory text.
 
+### The lobby stays until the second seat is taken
+
+Found in review. The first cut sent anyone holding a seat straight to the table, which stranded
+the host: the invite link, the join form and the cancel button all live on the lobby, and a host
+who had just opened a game could reach none of them. `canCancel` was still computed server-side
+and had nothing rendering it.
+
+The board is not what a freshly opened game is for — filling the second seat is. So:
+
+- A seat holder sees the **lobby** while the guest seat is open, and the **table** once it is
+  claimed. `seats.guest.claimed` is the gate, read off the row rather than presence, so it does
+  not flap when the opponent closes a tab.
+- **Play solo** takes a waiting player to the table early, since until the sync slice an opponent
+  changes nothing about your own half.
+- **Waiting room** on the board's top strip goes back, and disappears once the seat is taken.
+  Without it, Play solo would be a one-way door back into the same bug.
+- Solo is not persisted. A refresh re-deals the board anyway, so there is no table to return to
+  and the lobby is the honest landing.
+
+This answers the open question below: the board stays on `games/show.tsx`, but holding a seat is
+no longer what decides which half you see.
+
+### The card view, and the text PonyRec had to start sending
+
+The board wants a card detail view — large image, name, harmony cost, Inspiration, and the card's
+printed text. Everything but the text was already on the wire. The text was not on the wire at all:
+it existed only inside the card art.
+
+**The field was added to PonyRec first**, the same way `card_backs` and `copy_key` were, rather
+than shipping a view whose text panel was empty.
+
+- **It sends one composed field, `card_text`, not three raw ones.** PonyRec stores a card's text in
+  four places by subtype: a Character's abilities are rows in an `effects` table, an Event's or
+  Item's is `effect_text`, a Scene's is `inspire_effect`, a Story card's is `story_effect`. None of
+  that is a fact about the game, so none of it crosses the seam — the endpoint flattens it and this
+  app renders a string.
+- **There was no helper to reuse over there.** `CardController::cardDescription()` is a private
+  meta-description builder with a first-wins fallback chain; `CardSearchText` and
+  `DeckTokens::deckText()` compose text for search and token scanning. The per-subtype knowledge
+  lived only in PonyRec's React card detail. `App\Cards\CardText` is new and now owns it.
+- **A Character's abilities keep their triggers.** Each is led by `[Appear]` or
+  `[Activated · Cost: Tap · Adventure Zone]`, separated by a blank line, because a cost and a
+  trigger change what an ability does — an activated ability you cannot tell is activated reads as
+  though it simply happens.
+- **`{Mechanic}` braces stay in the string** and this app draws them as pills. Stripping them at
+  the source would have thrown away a distinction no consumer could recover.
+
+The view itself is `components/CardViewModal.tsx`, opened by the `v` binding and the card menu's
+View card row — both restored, having been dropped in the port for want of a page to open. It is
+deliberately not PonyRec's card page: no play rates, no archetype profile, no keyword chips. The
+three text states are distinguished, because they are different facts: text, a card that prints
+none, and a deck snapshot taken before the field existed, which says so rather than blaming the
+card.
+
+Reading a card is the one action that changes nothing, so View card is offered everywhere — in a
+pile, on a token, and on a face-down card, which is yours and which you already know.
+
 ### Tests are ported, not rewritten
 
 The unit suites come over as close to verbatim as the import paths and the card type allow. Where
@@ -212,9 +269,9 @@ than selected by `game.setup`.
 
 ## Open questions
 
-- **Does the board belong on `games/show.tsx` or its own route?** It is on `games/show.tsx`, which
-  now renders the lobby or the table depending on whether you hold a seat. That reads fine so far
-  and costs no second route to re-derive the seat in, but it has only been looked at by one person.
+- ~~**Does the board belong on `games/show.tsx` or its own route?**~~ Settled in review: one route,
+  which renders the lobby or the table depending on whether the second seat is taken. See "The
+  lobby stays until the second seat is taken".
 - **What does a watcher see?** The lobby, for now. There is no board to mirror until the sync
   slice, and showing them an empty table would be worse than showing them the room.
 - **What does "restart" mean once there are two seats?** Solo it re-deals. With an opponent it is

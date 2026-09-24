@@ -51,6 +51,22 @@ export interface Card {
   /** `I`–`IV` on Story cards, null elsewhere. */
   story_stage: string | null;
   /**
+   * The card's printed rules text, composed by PonyRec into one string whatever
+   * the subtype — a Character's abilities are rows in a table over there, an
+   * Event's is a column, and none of that crosses the seam.
+   *
+   * A Character's abilities are separated by a blank line and each leads with
+   * `[Appear]` or `[Activated · Cost: Tap · Adventure Zone]`; a Scene's Inspire
+   * effect is labelled the same way. `{Mechanic}` braces mark printed banners and
+   * are part of the text. Render it verbatim: the newlines are meaningful, and it
+   * is plain text, never HTML.
+   *
+   * Null when the card prints no text (a Main Character). Optional only until
+   * PonyRec ships it (NByam13/kayou_structured#170) — a snapshot taken before
+   * then has no text to show.
+   */
+  card_text?: string | null;
+  /**
    * Opaque absolute URLs, served from a bucket on a different host from the API.
    * The host can change, the file names do not follow `card_number`, and a
    * cache-busting query string may be appended — so these are used exactly as

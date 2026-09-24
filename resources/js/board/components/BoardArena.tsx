@@ -1,6 +1,6 @@
-import { Deck } from '@/types/cards';
+import { Card, Deck } from '@/types/cards';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BoardFocusProvider, BoardTokensProvider } from '../context';
+import { BoardCardViewProvider, BoardFocusProvider, BoardTokensProvider } from '../context';
 import { useHoverFollowsPointer } from '../hoverTarget';
 import { MlpGameZone, MlpOutOfPlayBar } from '../mlp/MlpTable';
 import {
@@ -14,6 +14,7 @@ import { useBoardShortcuts } from '../useBoardShortcuts';
 import { nextPlanSlot, promotionTarget, useGame } from '../useGame';
 import BoardControls from './BoardControls';
 import BoardShell from './BoardShell';
+import CardViewModal from './CardViewModal';
 import Randomizers from './Randomizers';
 import ShortcutOverlay from './ShortcutOverlay';
 import ShortcutsButton from './ShortcutsButton';
@@ -77,6 +78,10 @@ export default function BoardArena({
   const [viewer, setViewer] = useState<Extract<ZoneId, 'library' | 'retire' | 'sceneDeck'> | null>(
     null
   );
+  // The card being read, or null. A card rather than a uid, so the dialog holds
+  // what it is showing: a card retired, drawn or moved out from under an open
+  // view would otherwise blank it mid-read.
+  const [viewing, setViewing] = useState<Card | null>(null);
   const [noticeDismissed, setNoticeDismissed] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   // Which card the keyboard shortcuts act on. Tracked here rather than in the
@@ -113,19 +118,21 @@ export default function BoardArena({
   useHoverFollowsPointer(state, setHovered);
 
   const toggleShortcuts = useCallback(() => setShowShortcuts((open) => !open), []);
+  const viewCard = useCallback((card: Card) => setViewing(card), []);
+  const closeView = useCallback(() => setViewing(null), []);
 
   // Escape drops the selection, but only once the surfaces that already own
   // Escape have had it. A pile viewer is the thing you meant to close, and
   // clearing the selection out from under it would be a second, unasked-for
   // undo. The card menu closes itself, so it is not checked here.
   useEffect(() => {
-    if (selection.size === 0 || viewer !== null || showShortcuts) return;
+    if (selection.size === 0 || viewer !== null || showShortcuts || viewing !== null) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') clearSelection();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selection, viewer, showShortcuts, clearSelection]);
+  }, [selection, viewer, showShortcuts, viewing, clearSelection]);
 
   // The callback rides a ref so the effect fires on state changes only — a
   // parent re-render with a fresh closure must not re-announce an unchanged
@@ -234,12 +241,13 @@ export default function BoardArena({
     onTopCardToPlan: topCardToPlan,
     onPromoteStage: promoteStage,
     onToggleHelp: toggleShortcuts,
+    onViewCard: viewCard,
     // A pile viewer is the softer keyboard case: the Retire pile is public and
     // its rows are real cards, so it keeps the card bindings and hovering a row
     // aims them, while the hidden piles hand nothing over. Pulling out of those
     // has to reshuffle what reading them exposed (the TUTOR action), which a raw
     // shortcut would skip.
-    enabled: viewer === null || viewer === 'retire',
+    enabled: viewing === null && (viewer === null || viewer === 'retire'),
     scope: viewer === null ? 'all' : 'card',
   });
 
@@ -264,71 +272,76 @@ export default function BoardArena({
 
   return (
     <BoardTokensProvider value={deck.tokens}>
-      <BoardFocusProvider value={focus}>
-        <BoardShell
-          state={state}
-          dispatch={dispatch}
-          scale={scale}
-          backs={deck.card_backs ?? null}
-          selection={selection}
-          setSelection={setSelection}
-          header={
-            <>
-              {header}
-              {issues.length > 0 && !noticeDismissed && (
-                <div className="mb-3 flex items-start justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
-                  <span>Incomplete deck — playing what&rsquo;s here ({issues.join(', ')}).</span>
-                  <button
-                    onClick={() => setNoticeDismissed(true)}
-                    className="shrink-0 font-semibold hover:underline"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              )}
-            </>
-          }
-          gameZone={
-            <MlpGameZone
-              state={state}
-              scale={scale}
-              selection={selection}
-              setSelection={setSelection}
-              controls={controls}
-            />
-          }
-          outOfPlayBar={(hand) => (
-            <MlpOutOfPlayBar
-              state={state}
+      <BoardCardViewProvider value={viewCard}>
+        <BoardFocusProvider value={focus}>
+          <BoardShell
+            state={state}
+            dispatch={dispatch}
+            scale={scale}
+            backs={deck.card_backs ?? null}
+            selection={selection}
+            setSelection={setSelection}
+            header={
+              <>
+                {header}
+                {issues.length > 0 && !noticeDismissed && (
+                  <div className="mb-3 flex items-start justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
+                    <span>Incomplete deck — playing what&rsquo;s here ({issues.join(', ')}).</span>
+                    <button
+                      onClick={() => setNoticeDismissed(true)}
+                      className="shrink-0 font-semibold hover:underline"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+              </>
+            }
+            gameZone={
+              <MlpGameZone
+                state={state}
+                scale={scale}
+                selection={selection}
+                setSelection={setSelection}
+                controls={controls}
+              />
+            }
+            outOfPlayBar={(hand) => (
+              <MlpOutOfPlayBar
+                state={state}
+                dispatch={dispatch}
+                hand={hand}
+                actions={{
+                  onShuffleSceneDeck: () => dispatch({ type: 'SHUFFLE_SCENE_DECK' }),
+                  onOpenSceneDeck: () => setViewer('sceneDeck'),
+                  onOpenLibrary: () => setViewer('library'),
+                  onOpenRetire: () => setViewer('retire'),
+                  onDrawFromLibrary: draw,
+                  onRevealScene: revealScene,
+                  onTopCardToPlan: topCardToPlan,
+                  onRevealTopCard: revealTopCard,
+                }}
+              />
+            )}
+          />
+
+          {viewer && (
+            <ZoneViewerModal
+              zone={viewer}
+              cards={state.zones[viewer]}
               dispatch={dispatch}
-              hand={hand}
-              actions={{
-                onShuffleSceneDeck: () => dispatch({ type: 'SHUFFLE_SCENE_DECK' }),
-                onOpenSceneDeck: () => setViewer('sceneDeck'),
-                onOpenLibrary: () => setViewer('library'),
-                onOpenRetire: () => setViewer('retire'),
-                onDrawFromLibrary: draw,
-                onRevealScene: revealScene,
-                onTopCardToPlan: topCardToPlan,
-                onRevealTopCard: revealTopCard,
-              }}
+              onClose={() => setViewer(null)}
             />
           )}
-        />
 
-        {viewer && (
-          <ZoneViewerModal
-            zone={viewer}
-            cards={state.zones[viewer]}
-            dispatch={dispatch}
-            onClose={() => setViewer(null)}
-          />
-        )}
+          {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
 
-        {showShortcuts && <ShortcutOverlay onClose={() => setShowShortcuts(false)} />}
+          {/* Above the pile viewers, which it can be opened from. */}
+          {viewing && <CardViewModal card={viewing} onClose={closeView} />}
 
-        <Toast show={show} message={message} />
-      </BoardFocusProvider>
+          <Toast show={show} message={message} />
+        </BoardFocusProvider>
+      </BoardCardViewProvider>
     </BoardTokensProvider>
   );
 }
