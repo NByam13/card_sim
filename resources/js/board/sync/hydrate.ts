@@ -48,10 +48,7 @@ function placeholder(zone: ZoneId, cardNumber: string | null): Card {
  * counters — as a frame carrying its number. It fills in when the lookup lands,
  * so a slow or failed resolve costs art rather than the board.
  */
-export function hydrateMirror(
-  state: PublicState,
-  cards: ReadonlyMap<string, Card>
-): MirrorState {
+export function hydrateMirror(state: PublicState, cards: ReadonlyMap<string, Card>): MirrorState {
   const zones = {} as Record<ZoneId, CardInstance[]>;
 
   for (const zone of ALL_ZONES) {
@@ -59,18 +56,16 @@ export function hydrateMirror(
   }
 
   for (const zone of PUBLIC_ZONES) {
-    zones[zone] = (state.zones[zone] ?? []).map(
-      (wire: WireInstance): CardInstance => ({
-        uid: wire.uid,
-        card:
-          (wire.cardNumber ? cards.get(wire.cardNumber) : undefined) ??
-          placeholder(zone, wire.cardNumber),
-        tapped: wire.tapped,
-        faceDown: wire.faceDown,
-        counters: wire.counters,
-        inspiration: wire.inspiration,
-      })
-    );
+    zones[zone] = (state.zones[zone] ?? []).map((wire: WireInstance): CardInstance => ({
+      uid: wire.uid,
+      card:
+        (wire.cardNumber ? cards.get(wire.cardNumber) : undefined) ??
+        placeholder(zone, wire.cardNumber),
+      tapped: wire.tapped,
+      faceDown: wire.faceDown,
+      counters: wire.counters,
+      inspiration: wire.inspiration,
+    }));
   }
 
   return {
@@ -86,10 +81,7 @@ export function hydrateMirror(
 }
 
 /** Every card number in a board that is not resolved yet. */
-export function unresolvedNumbers(
-  state: PublicState,
-  cards: ReadonlyMap<string, Card>
-): string[] {
+export function unresolvedNumbers(state: PublicState, cards: ReadonlyMap<string, Card>): string[] {
   const missing = new Set<string>();
 
   for (const zone of PUBLIC_ZONES) {

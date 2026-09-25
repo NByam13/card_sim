@@ -41,9 +41,7 @@ function publicState(zones: Partial<Record<string, WireInstance[]>> = {}): Publi
     zones: Object.fromEntries(
       PUBLIC_ZONES.map((zone) => [zone, zones[zone] ?? []])
     ) as PublicState['zones'],
-    counts: Object.fromEntries(
-      HIDDEN_ZONES.map((zone) => [zone, 0])
-    ) as PublicState['counts'],
+    counts: Object.fromEntries(HIDDEN_ZONES.map((zone) => [zone, 0])) as PublicState['counts'],
     turn: 1,
     started: true,
   };

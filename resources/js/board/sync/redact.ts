@@ -14,16 +14,14 @@ export function redact(state: GameState): PublicState {
   const zones = {} as Record<PublicZoneId, WireInstance[]>;
 
   for (const zone of PUBLIC_ZONES) {
-    zones[zone] = state.zones[zone].map(
-      (instance): WireInstance => ({
-        uid: instance.uid,
-        cardNumber: instance.faceDown ? null : instance.card.card_number,
-        tapped: instance.tapped,
-        faceDown: instance.faceDown,
-        counters: instance.counters,
-        inspiration: instance.faceDown ? null : instance.inspiration,
-      })
-    );
+    zones[zone] = state.zones[zone].map((instance): WireInstance => ({
+      uid: instance.uid,
+      cardNumber: instance.faceDown ? null : instance.card.card_number,
+      tapped: instance.tapped,
+      faceDown: instance.faceDown,
+      counters: instance.counters,
+      inspiration: instance.faceDown ? null : instance.inspiration,
+    }));
   }
 
   return {
