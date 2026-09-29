@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core';
 import { CSSProperties, ReactNode } from 'react';
-import { useBoardZoom } from '../context';
+import { useBoardReadOnly, useBoardZoom } from '../context';
 import { CardInstance, ZoneId } from '../types';
 import BoardCard from './BoardCard';
 import { BASE_WIDTH } from './CardFace';
@@ -77,7 +77,15 @@ export default function Zone({
   /** Inline styles — e.g. zoom-driven minimum dimensions on Adventure lanes. */
   style?: CSSProperties;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+  const readOnly = useBoardReadOnly();
+  // dnd-kit keys droppables by id and a later registration replaces an earlier
+  // one. The mirror renders the same zone ids inside the board's own
+  // DndContext, so its zones have to answer to different ones or they would
+  // take your board's place in the registry and nothing would accept a drop.
+  const { setNodeRef, isOver } = useDroppable({
+    id: readOnly ? `mirror:${id}` : id,
+    disabled: readOnly,
+  });
   const scale = useBoardZoom();
 
   if (bare) {

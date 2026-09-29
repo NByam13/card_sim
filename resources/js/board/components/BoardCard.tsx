@@ -6,6 +6,7 @@ import {
   useBoardDispatch,
   useBoardFocus,
   useBoardGroupDrag,
+  useBoardReadOnly,
   useBoardZoom,
 } from '../context';
 import { SELECTABLE_ATTR } from '../selection';
@@ -59,7 +60,11 @@ export default function BoardCard({
   const groupDragging = useBoardGroupDrag();
   // The motion of the dragged card is rendered by the board's DragOverlay; this
   // element just dims in place to read as "picked up".
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: instance.uid });
+  const readOnly = useBoardReadOnly();
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: instance.uid,
+    disabled: readOnly,
+  });
   const isSelected = focus.selection.has(instance.uid);
   // Dragging one card of a selection carries the whole group, so every member
   // dims, not just the one under the cursor.
@@ -87,14 +92,15 @@ export default function BoardCard({
 
   const startHover = () => {
     // Two different notions of "hovered": the shortcut target is immediate,
-    // while the zoom preview waits out a dwell.
-    focus.setHovered(instance.uid);
+    // while the zoom preview waits out a dwell. A mirror card is only ever
+    // looked at, so it takes the preview and never the keyboard.
+    if (!readOnly) focus.setHovered(instance.uid);
     clearTimeout(hoverTimer.current);
     hoverTimer.current = setTimeout(() => setHovered(true), HOVER_DWELL_MS);
   };
 
   const endHover = () => {
-    focus.setHovered(null);
+    if (!readOnly) focus.setHovered(null);
     clearTimeout(hoverTimer.current);
     setHovered(false);
   };
@@ -116,8 +122,8 @@ export default function BoardCard({
           setNodeRef(node);
           rootRef.current = node;
         }}
-        {...attributes}
-        {...listeners}
+        {...(readOnly ? {} : attributes)}
+        {...(readOnly ? {} : listeners)}
         // Lets the board re-read which card is under the cursor after the layout
         // shifts beneath a still pointer — see `hoverTarget`.
         data-card-uid={instance.uid}
@@ -125,6 +131,7 @@ export default function BoardCard({
         // See SELECTABLE_ATTR.
         {...{ [SELECTABLE_ATTR]: instance.uid }}
         onPointerDown={(e) => {
+          if (readOnly) return;
           pressedAt.current = { x: e.clientX, y: e.clientY };
           // The listeners spread above already define onPointerDown, and this
           // prop replaces rather than adds to it, so the drag sensor's own
@@ -132,8 +139,9 @@ export default function BoardCard({
           // card dragging once the click guard below arrived.
           listeners?.onPointerDown?.(e);
         }}
-        onDoubleClick={() => dispatch({ type: 'TAP', uid: instance.uid })}
+        onDoubleClick={() => !readOnly && dispatch({ type: 'TAP', uid: instance.uid })}
         onClick={(e) => {
+          if (readOnly) return;
           const from = pressedAt.current;
           pressedAt.current = null;
           if (from && draggedTooFar(from, { x: e.clientX, y: e.clientY })) {
@@ -152,6 +160,7 @@ export default function BoardCard({
         }}
         onContextMenu={(e) => {
           e.preventDefault();
+          if (readOnly) return;
           focus.setSelected(instance.uid);
           setMenu({ x: e.clientX, y: e.clientY });
         }}
@@ -160,7 +169,9 @@ export default function BoardCard({
         style={{ width }}
         // The selection ring is a fixed sky hue and hover is emerald: two
         // meanings sharing one colour would be unreadable on a busy board.
-        className={`group relative shrink-0 cursor-grab touch-none overflow-visible rounded-md bg-gray-200 shadow transition-transform hover:ring-2 hover:ring-emerald-400 ${
+        className={`group relative shrink-0 touch-none overflow-visible rounded-md bg-gray-200 shadow transition-transform hover:ring-2 hover:ring-emerald-400 ${
+          readOnly ? 'cursor-default' : 'cursor-grab'
+        } ${
           isSelected ? 'ring-[3px] ring-sky-400' : 'ring-1 ring-black/10'
         } ${tapped ? 'rotate-90' : ''} ${lifted ? 'opacity-30' : ''}`}
       >
@@ -197,29 +208,32 @@ export default function BoardCard({
         {!faceDown && (
           <>
             {/* ⋮ menu trigger (touch-friendly), revealed on hover. */}
-            <button
-              onPointerDown={stopDrag}
-              onDoubleClick={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                openMenuAtCard();
-              }}
-              className="absolute top-0 right-0 hidden rounded-bl bg-black/60 px-1 text-[11px] leading-tight text-white group-hover:block"
-              aria-label="Card actions"
-            >
-              ⋮
-            </button>
+            {!readOnly && (
+              <button
+                onPointerDown={stopDrag}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openMenuAtCard();
+                }}
+                className="absolute top-0 right-0 hidden rounded-bl bg-black/60 px-1 text-[11px] leading-tight text-white group-hover:block"
+                aria-label="Card actions"
+              >
+                ⋮
+              </button>
+            )}
 
             {/* Counters badge (bottom-left) — click to +1; dbl-click must not tap. */}
             {counters > 0 && (
               <button
+                disabled={readOnly}
                 onPointerDown={stopDrag}
                 onDoubleClick={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   dispatch({ type: 'ADD_COUNTER', uid: instance.uid });
                 }}
-                title="Click to +1 counter"
+                title={readOnly ? undefined : 'Click to +1 counter'}
                 className="absolute bottom-0 left-0 rounded-tr bg-indigo-600 px-1 text-[10px] leading-tight font-bold text-white"
               >
                 {counters}
@@ -229,13 +243,14 @@ export default function BoardCard({
             {/* Inspiration badge (bottom-right) — click to +1. */}
             {inspiration !== null && (
               <button
+                disabled={readOnly}
                 onPointerDown={stopDrag}
                 onDoubleClick={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   dispatch({ type: 'BUMP_INSPIRATION', uid: instance.uid, delta: 1 });
                 }}
-                title="Click to +1 inspiration"
+                title={readOnly ? undefined : 'Click to +1 inspiration'}
                 className={`absolute -right-1 -bottom-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] leading-none font-bold text-white shadow ${
                   inspirationOverridden ? 'bg-emerald-600' : 'bg-rose-600'
                 }`}

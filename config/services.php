@@ -47,6 +47,10 @@ return [
         'base_url' => env('PONYREC_BASE_URL', 'https://ponyrec.net'),
         'timeout' => (int) env('PONYREC_TIMEOUT', 5),
         'verify' => filter_var(env('PONYREC_VERIFY_TLS', true), FILTER_VALIDATE_BOOL),
+        // Card data changes only when a card is corrected. A week is long enough
+        // that a table fetches each card once, short enough that a correction
+        // lands without a deploy.
+        'card_ttl' => (int) env('PONYREC_CARD_TTL', 604800),
     ],
 
 ];

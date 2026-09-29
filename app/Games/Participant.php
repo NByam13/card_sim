@@ -49,7 +49,11 @@ final readonly class Participant implements Authenticatable
         return $participant instanceof self ? $participant : null;
     }
 
-    /** The seat this participant holds in a game, or null when watching. */
+    /**
+     * The seat this participant holds in a game, or null when watching.
+     *
+     * @return 'host'|'guest'|null
+     */
     public function roleIn(Game $game): ?string
     {
         return $game->seatFor($this->seatTokens[$game->code] ?? null);

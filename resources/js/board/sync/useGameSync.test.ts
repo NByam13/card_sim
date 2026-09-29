@@ -1,0 +1,208 @@
+import { act, renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PublicState, Seat, StateFrame } from './types';
+import { useGameSync } from './useGameSync';
+
+vi.mock('@laravel/echo-react', () => ({
+  useEchoPresence: () => ({ channel: () => presence }),
+}));
+
+interface Member {
+  id: string;
+  role: Seat | 'spectator';
+  name: string | null;
+}
+
+/**
+ * A stand-in for the presence channel, holding whatever the hook bound so a test
+ * can drive it. Chainable, like Echo's own.
+ */
+function fakeChannel() {
+  const bound: {
+    here?: (members: Member[]) => void;
+    joining?: (member: Member) => void;
+    leaving?: (member: Member) => void;
+    events: Record<string, (payload: unknown) => void>;
+  } = { events: {} };
+
+  const channel = {
+    bound,
+    here(handler: (members: Member[]) => void) {
+      bound.here = handler;
+      return channel;
+    },
+    joining(handler: (member: Member) => void) {
+      bound.joining = handler;
+      return channel;
+    },
+    leaving(handler: (member: Member) => void) {
+      bound.leaving = handler;
+      return channel;
+    },
+    listen(event: string, handler: (payload: unknown) => void) {
+      bound.events[event] = handler;
+      return channel;
+    },
+    // Never called, and a test says so. See the client-event note on the hook.
+    listenForWhisper: vi.fn(() => channel),
+    error() {
+      return channel;
+    },
+  };
+
+  return channel;
+}
+
+let presence: ReturnType<typeof fakeChannel>;
+
+const member = (role: Member['role'], id: string = role): Member => ({ id, role, name: null });
+
+const frame = (seat: Seat, seq = 1): StateFrame & { seat: Seat } => ({
+  seat,
+  session: 's1',
+  seq,
+  state: { zones: {}, counts: {}, turn: 1, started: true } as unknown as PublicState,
+});
+
+function sync(seat: Seat = 'host') {
+  const onFrame = vi.fn();
+  const onAnnounce = vi.fn();
+  const onSeatClaimed = vi.fn();
+  const onAccepted = vi.fn();
+  const view = renderHook(() =>
+    useGameSync({ code: 'abc123', seat, onFrame, onAnnounce, onSeatClaimed, onAccepted })
+  );
+
+  return { ...view, onFrame, onAnnounce, onSeatClaimed, onAccepted };
+}
+
+beforeEach(() => {
+  presence = fakeChannel();
+});
+
+describe('useGameSync', () => {
+  it('reports the opponent as present when they are already here', () => {
+    const { result } = sync('host');
+
+    act(() => presence.bound.here?.([member('host'), member('guest')]));
+
+    expect(result.current.opponentPresent).toBe(true);
+  });
+
+  it('does not mistake your own seat for the opponent', () => {
+    const { result } = sync('host');
+
+    act(() => presence.bound.here?.([member('host')]));
+
+    expect(result.current.opponentPresent).toBe(false);
+  });
+
+  it('counts watchers without calling them the opponent', () => {
+    const { result } = sync('host');
+
+    act(() =>
+      presence.bound.here?.([member('host'), member('spectator', 'w1'), member('spectator', 'w2')])
+    );
+
+    expect(result.current.opponentPresent).toBe(false);
+    expect(result.current.watching).toBe(2);
+  });
+
+  it('follows the opponent arriving and leaving', () => {
+    const { result } = sync('host');
+
+    act(() => presence.bound.here?.([member('host')]));
+    act(() => presence.bound.joining?.(member('guest')));
+    expect(result.current.opponentPresent).toBe(true);
+
+    act(() => presence.bound.leaving?.(member('guest')));
+    expect(result.current.opponentPresent).toBe(false);
+  });
+
+  it('follows watchers arriving and leaving', () => {
+    const { result } = sync('host');
+
+    act(() => presence.bound.here?.([member('host')]));
+    act(() => presence.bound.joining?.(member('spectator', 'w1')));
+    act(() => presence.bound.joining?.(member('spectator', 'w2')));
+    expect(result.current.watching).toBe(2);
+
+    act(() => presence.bound.leaving?.(member('spectator', 'w1')));
+    expect(result.current.watching).toBe(1);
+  });
+
+  /** Whoever just arrived has no board, so everyone already here re-sends one. */
+  it('announces on subscribing and whenever anyone joins', () => {
+    const { onAnnounce } = sync('host');
+
+    act(() => presence.bound.here?.([member('host')]));
+    expect(onAnnounce).toHaveBeenCalledTimes(1);
+
+    act(() => presence.bound.joining?.(member('guest')));
+    expect(onAnnounce).toHaveBeenCalledTimes(2);
+
+    act(() => presence.bound.joining?.(member('spectator', 'w1')));
+    expect(onAnnounce).toHaveBeenCalledTimes(3);
+  });
+
+  it('hands over the opponent’s frame without the seat it was stamped with', () => {
+    const { onFrame } = sync('host');
+
+    act(() => presence.bound.events['.board.state']?.(frame('guest', 4)));
+
+    expect(onFrame).toHaveBeenCalledWith({
+      session: 's1',
+      seq: 4,
+      state: expect.anything(),
+    });
+    expect(onFrame.mock.calls[0][0]).not.toHaveProperty('seat');
+  });
+
+  /**
+   * The relay is `toOthers`, so this should not arrive at all — but a frame
+   * stamped with your own seat would overwrite the mirror with your own board.
+   */
+  it('ignores a frame stamped with its own seat', () => {
+    const { onFrame } = sync('host');
+
+    act(() => presence.bound.events['.board.state']?.(frame('host')));
+
+    expect(onFrame).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Reverb cannot say who sent a client event and accepts them from connections
+   * that never subscribed. Not listening is what makes an injected one inert.
+   */
+  it('never listens for client events', () => {
+    sync('host');
+
+    expect(presence.listenForWhisper).not.toHaveBeenCalled();
+    expect(Object.keys(presence.bound.events)).toEqual([
+      '.board.state',
+      '.seat.claimed',
+      '.match.accepted',
+    ]);
+  });
+
+  it('reports a seat claimed while the board is on screen', () => {
+    const { onSeatClaimed } = sync('host');
+
+    act(() => presence.bound.events['.seat.claimed']?.({}));
+
+    expect(onSeatClaimed).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes on both seats’ answers when one accepts, not just the sender’s', () => {
+    const { onAccepted } = sync('host');
+
+    act(() =>
+      presence.bound.events['.match.accepted']?.({
+        seat: 'guest',
+        accepted: { host: false, guest: true },
+      })
+    );
+
+    expect(onAccepted).toHaveBeenCalledWith({ host: false, guest: true });
+  });
+});

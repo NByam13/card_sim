@@ -1,6 +1,14 @@
-import { destroy } from '@/actions/App/Http/Controllers/GameController';
+import { accept, destroy } from '@/actions/App/Http/Controllers/GameController';
 import BoardArena from '@/board/components/BoardArena';
+import Modal from '@/components/Modal';
+import MirrorBoard from '@/board/components/MirrorBoard';
+import { CompactGameState, expandState } from '@/board/sync/persist';
+import { PublicState } from '@/board/sync/types';
+import { useBoardRelay } from '@/board/sync/useBoardRelay';
+import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
+import { useMirror } from '@/board/sync/useMirror';
 import ZoomControls from '@/board/components/ZoomControls';
+import { GameState } from '@/board/types';
 import { usePersistentZoom } from '@/board/zoom';
 import { Deck } from '@/types/cards';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -22,8 +30,14 @@ interface Game {
   status: 'waiting' | 'active' | 'finished';
   seats: Record<Seat, SeatState>;
   you: Seat | null;
+  /** Which seats are ready to play each other. Both means the match is live. */
+  accepted: Acceptance;
   /** This seat's own deck snapshot, to deal its board from. Null for a watcher. */
   deck: Deck | null;
+  /** This seat's board as it was last saved, so a refresh resumes it. */
+  saved_state: CompactGameState | null;
+  /** The opponent's board as they last saved it, to seed their mirror. */
+  opponent_state: PublicState | null;
 }
 
 interface Member {
@@ -49,14 +63,11 @@ interface Props {
  * there with no invite and no way to cancel. So the lobby stays until the
  * second seat is taken, and a player who would rather not wait says so.
  *
- * A watcher stays on the lobby regardless — there is nothing to show them until
- * the sync slice gives them a board to mirror.
+ * A watcher stays on the lobby regardless — they get a board of their own to
+ * mirror in the slice after this one.
  */
 export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Props) {
   const [cancelled, setCancelled] = useState(false);
-  // Not persisted, on purpose: a refresh re-deals the board anyway (no
-  // persistence in this slice), so there is no table to come back to and
-  // landing on the lobby is the honest result of reloading.
   const [solo, setSolo] = useState(false);
 
   // Stable, so the channel's handlers are bound once rather than on every
@@ -74,7 +85,6 @@ export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Prop
         game={game}
         seat={seat}
         deck={game.deck}
-        onCancelled={onCancelled}
         onWaitingRoom={seated ? null : () => setSolo(false)}
       />
     );
@@ -123,10 +133,10 @@ export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Prop
 /**
  * The way onto the table before anyone else turns up.
  *
- * Until the sync slice there is nothing an opponent changes about your own
- * half, so waiting for one is a courtesy rather than a requirement — you can
- * deal and play while the seat is still open, and the invite link is a click
- * back.
+ * Waiting for an opponent is a courtesy rather than a requirement: you can deal
+ * and play your own half while the seat is still open, and the invite link is a
+ * click back. Taking it up is why starting a match is a handshake — whoever
+ * takes the seat arrives to find you already mid-game.
  */
 function PlaySolo({ onStart }: { onStart: () => void }) {
   return (
@@ -147,27 +157,93 @@ function PlaySolo({ onStart }: { onStart: () => void }) {
 }
 
 /**
- * Your half of the table.
+ * Your half of the table, with the opponent's above it.
  *
  * The board fills the screen rather than sitting inside the lobby's column: it
  * is the page now, and the lobby's chrome would cost height the table needs.
- * The presence strip rides along in the header, which the shell scrolls.
+ * The seat list goes with it — once two people are playing, the mirror says who
+ * is there far better than a list of two names does.
+ *
+ * This holds the page's one channel subscription while playing. The lobby's
+ * `Table` holds the other, and the two never exist at once: channels are
+ * reference-counted, so a second subscription would keep the first alive across
+ * the remount and the seat would never be re-authorized.
  */
 function Playing({
   game,
   seat,
   deck,
-  onCancelled,
   onWaitingRoom,
 }: {
   game: Game;
   seat: Seat;
   deck: Deck;
-  onCancelled: () => void;
   /** Back to the lobby, or null once the second seat is taken and there is no lobby left to want. */
   onWaitingRoom: (() => void) | null;
 }) {
   const [scale, setScale] = usePersistentZoom('board', 1);
+  // The mirror is glanced at where your own board is worked on, so it keeps its
+  // own scale and its own cookie.
+  const [mirrorScale, setMirrorScale] = usePersistentZoom('opponent', 1);
+  const opponent = seat === 'host' ? 'guest' : 'host';
+  const seated = game.seats[opponent].claimed;
+
+  // Props say what the server last recorded; the channel says what happened
+  // since. Either can be the newer of the two, so the live answer is state.
+  const [accepted, setAccepted] = useState<Acceptance>(game.accepted);
+  useEffect(() => setAccepted(game.accepted), [game.accepted]);
+
+  const matchLive = accepted.host && accepted.guest;
+  const [liveOnMount] = useState(matchLive);
+  // The other seat turning up while this board was on screen, as opposed to
+  // already being there when the page loaded. Only the first is worth a modal.
+  const [seatedOnMount] = useState(seated);
+  const [declined, setDeclined] = useState(false);
+
+  const { publish, announce } = useBoardRelay({
+    code: game.code,
+    relaying: matchLive,
+    saving: game.status === 'active',
+  });
+  const { mirror, receive } = useMirror(lookupCard, game.opponent_state);
+  const { opponentPresent } = useGameSync({
+    code: game.code,
+    seat,
+    onFrame: receive,
+    onAnnounce: announce,
+    // Presence cannot tell a watcher from the player who just sat down, and the
+    // props this page is holding predate the claim either way.
+    onSeatClaimed: useCallback(() => router.reload({ only: ['game'] }), []),
+    onAccepted: useCallback((next: Acceptance) => {
+      setAccepted(next);
+
+      // The match going live discarded both solo boards on the server, and the
+      // props this page still holds are the boards it discarded — including the
+      // opponent's, which would otherwise seed the mirror with the game they
+      // were playing by themselves.
+      if (next.host && next.guest) {
+        router.reload({ only: ['game'] });
+      }
+    }, []),
+  });
+
+  // The saved board is resolved once, against the deck it was dealt from. A card
+  // that no longer resolves means the deck changed, and `expandState` returns
+  // null so the board deals fresh rather than restoring half of one.
+  const [restored] = useState<GameState | null>(() =>
+    game.saved_state ? expandState(game.saved_state, deck) : null
+  );
+
+  // A match starting re-deals both halves, so the hand someone goldfished while
+  // they waited does not become the hand they play. The key remounts the arena;
+  // dropping the restore is what stops it dealing the discarded board again.
+  const arenaKey = matchLive ? 'match' : 'solo';
+  const savedState = matchLive && !liveOnMount ? null : restored;
+
+  const opponentName = game.seats[opponent].name ?? (opponent === 'host' ? 'Host' : 'Guest');
+  // A full visit rather than a bare POST: the board deals fresh from props that
+  // no longer carry a saved state, which is what accepting means.
+  const acceptMatch = useCallback(() => router.post(accept.url(game.code)), [game.code]);
 
   return (
     <>
@@ -179,13 +255,12 @@ function Playing({
           </Link>
           <div className="flex items-center gap-4">
             {/* The invite link and the cancel button live in the lobby, so while
-                the seat is open there has to be a way back to it. Leaving the
-                board costs the deal, which is why it says so. */}
+                the seat is open there has to be a way back to it. */}
             {onWaitingRoom && (
               <button
                 type="button"
                 onClick={onWaitingRoom}
-                title="The invite link and cancel live here. Your board is re-dealt when you come back."
+                title="The invite link and cancel live here."
                 className="text-xs font-medium text-gray-500 underline hover:text-gray-900"
               >
                 Waiting room
@@ -196,16 +271,140 @@ function Playing({
         </div>
 
         <BoardArena
+          key={arenaKey}
           deck={deck}
           scale={scale}
+          savedState={savedState}
+          onState={publish}
+          // Re-dealing your own opening in front of an opponent who does not
+          // re-deal theirs is a way around the mulligan rules, so it is a solo
+          // affordance only.
+          canRestart={!matchLive}
           header={
-            <div className="mb-3">
-              <Table key={seat} game={game} seat={seat} onCancelled={onCancelled} />
-            </div>
+            seated ? (
+              <div className="mb-3">
+                {matchLive ? (
+                  <MirrorBoard
+                    state={mirror}
+                    scale={mirrorScale}
+                    onScaleChange={setMirrorScale}
+                    backs={deck.card_backs ?? null}
+                    name={opponentName}
+                    present={opponentPresent}
+                  />
+                ) : (
+                  <MatchPending
+                    name={opponentName}
+                    youAccepted={accepted[seat]}
+                    onAccept={acceptMatch}
+                  />
+                )}
+              </div>
+            ) : undefined
           }
         />
       </div>
+
+      {/* Asked only of a seat the news reaches mid-game. Anyone who loads the
+          page into this state gets the standing invitation above instead. */}
+      {seated && !accepted[seat] && !seatedOnMount && !declined && (
+        <MatchInviteModal
+          name={opponentName}
+          onAccept={acceptMatch}
+          onDecline={() => setDeclined(true)}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * The opponent's half before there is one to show: either they have not agreed
+ * to play yet, or you have not.
+ *
+ * It sits exactly where the mirror will, so the board does not jump when the
+ * match starts and the space is never simply blank.
+ */
+function MatchPending({
+  name,
+  youAccepted,
+  onAccept,
+}: {
+  name: string;
+  /** You are waiting on them. The other way round, the next move is yours. */
+  youAccepted: boolean;
+  onAccept: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-6 text-center">
+      {youAccepted ? (
+        <p className="text-sm text-gray-500">
+          Waiting for <span className="font-medium text-gray-700">{name}</span> to accept the
+          match&hellip;
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-gray-600">
+            <span className="font-medium text-gray-900">{name}</span> is waiting to play.
+          </p>
+          <p className="text-xs text-gray-500">Starting deals you a fresh hand.</p>
+          <button
+            type="button"
+            onClick={onAccept}
+            className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+          >
+            Start the match &rarr;
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The ask, for a player who is mid-game when the other seat is taken.
+ *
+ * Deliberately interrupting: they are looking at their own board and would
+ * otherwise not notice that the game they opened is ready to start. Declining
+ * costs them nothing and leaves the invitation standing above the board.
+ */
+function MatchInviteModal({
+  name,
+  onAccept,
+  onDecline,
+}: {
+  name: string;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  return (
+    <Modal show onClose={onDecline} maxWidth="sm" labelledBy="match-invite-title">
+      <div className="space-y-3 bg-white p-5">
+        <h2 id="match-invite-title" className="text-lg font-semibold">
+          {name} has taken the other seat
+        </h2>
+        <p className="text-sm text-gray-600">
+          Start the match? You will both be dealt a fresh hand, so the board you are on now is
+          cleared.
+        </p>
+        <div className="flex items-center justify-end gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onDecline}
+            className="text-sm font-medium text-gray-500 underline hover:text-gray-900"
+          >
+            Keep playing alone
+          </button>
+          <button
+            type="button"
+            onClick={onAccept}
+            className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+          >
+            Start the match
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -250,9 +449,17 @@ function Table({
   // The page's one subscription, on purpose: channels are reference-counted, so
   // a second one here would keep the first alive through the remount above and
   // the seat would never be re-authorized.
-  const { channel } = useEchoPresence(`game.${game.code}`, '.seat.claimed', () =>
-    router.reload({ only: ['game', 'canJoin', 'canCancel'] })
-  );
+  const { channel } = useEchoPresence(`game.${game.code}`, '.seat.claimed', () => {
+    // Waiting here is accepting: this seat has no board for a match to start
+    // underneath, so it is dropped straight onto the table. A seat that left for
+    // solo play is not on this page and is asked instead.
+    if (seat) {
+      router.post(accept.url(game.code));
+      return;
+    }
+
+    router.reload({ only: ['game', 'canJoin', 'canCancel'] });
+  });
 
   useEffect(() => {
     const presence = channel();

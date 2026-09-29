@@ -63,6 +63,10 @@ final class Seating
                 'guest_deck_code' => $deckCode,
                 'guest_deck' => json_encode($deck),
                 'status' => 'active',
+                // Joining is itself accepting: this seat has no board yet, so
+                // there is nothing for a match to start underneath. Only a seat
+                // already playing alone gets asked.
+                'guest_accepted_at' => now(),
                 'last_activity_at' => now(),
             ]);
 

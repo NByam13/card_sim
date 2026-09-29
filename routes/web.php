@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\BoardSyncController;
+use App\Http\Controllers\CardController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
 use Illuminate\Support\Facades\Route;
@@ -18,4 +20,18 @@ Route::post('/games/{game}/join', [GameController::class, 'join'])
     ->middleware('throttle:10,1')
     ->name('games.join');
 
+Route::post('/games/{game}/accept', [GameController::class, 'accept'])->name('games.accept');
+
 Route::delete('/games/{game}', [GameController::class, 'destroy'])->name('games.destroy');
+
+// A seat's board, leaving the browser. Both derive the seat from the session.
+Route::post('/games/{game}/sync', [BoardSyncController::class, 'relay'])->name('games.sync');
+Route::post('/games/{game}/state', [BoardSyncController::class, 'save'])->name('games.state');
+
+// Cards a mirror meets that its own deck does not carry. `where` so a number
+// containing a dot still routes. Throttled because the number space is open and
+// a miss is never cached, so each one costs a round trip to PonyRec.
+Route::get('/cards/{number}', [CardController::class, 'show'])
+    ->where('number', '.*')
+    ->middleware('throttle:120,1')
+    ->name('cards.show');

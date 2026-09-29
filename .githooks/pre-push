@@ -1,15 +1,21 @@
 #!/bin/sh
 #
-# Blocks direct pushes to main. All work goes through a branch and a PR.
+# Blocks direct pushes to main, and runs the gate CI runs before anything
+# leaves the machine.
 #
 # Version-controlled rather than living in .git/hooks so it survives a fresh
 # clone. Enable with:
 #
 #     git config core.hooksPath .githooks
 #
-# Emergency override, for when a broken main genuinely cannot wait:
+# It must also be executable, or git ignores it silently:
+#
+#     chmod +x .githooks/pre-push
+#
+# Emergency overrides, for when a broken main genuinely cannot wait:
 #
 #     ALLOW_PUSH_TO_MAIN=1 git push origin main
+#     SKIP_PUSH_CHECKS=1 git push
 #
 # Reach for a PR first. Laravel Cloud deploys from main, so a bad main is a live
 # bad site, mid-match for anyone playing.
@@ -46,5 +52,27 @@ EOF
       ;;
   esac
 done
+
+if [ "$SKIP_PUSH_CHECKS" = "1" ]; then
+  echo "pre-push: SKIP_PUSH_CHECKS set, pushing without running the gate." >&2
+  exit 0
+fi
+
+# The same command the workflow runs, so a red build is found here rather than
+# on a pull request. Slow enough to notice and much faster than a CI round trip.
+echo "pre-push: running composer ci:check…" >&2
+
+if ! composer ci:check --quiet; then
+  cat >&2 <<EOF
+
+  Push blocked: the checks CI runs did not pass.
+
+  Fix them, or push anyway with:
+
+      SKIP_PUSH_CHECKS=1 git push
+
+EOF
+  exit 1
+fi
 
 exit 0

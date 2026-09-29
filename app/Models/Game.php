@@ -41,6 +41,14 @@ class Game extends Model
         'guest_deck_code',
         'host_deck',
         'guest_deck',
+        'host_state',
+        'guest_state',
+        'host_public_state',
+        'guest_public_state',
+        'host_seq',
+        'guest_seq',
+        'host_accepted_at',
+        'guest_accepted_at',
         'last_activity_at',
     ];
 
@@ -64,6 +72,14 @@ class Game extends Model
         return [
             'host_deck' => 'array',
             'guest_deck' => 'array',
+            'host_state' => 'array',
+            'guest_state' => 'array',
+            'host_public_state' => 'array',
+            'guest_public_state' => 'array',
+            'host_seq' => 'integer',
+            'guest_seq' => 'integer',
+            'host_accepted_at' => 'datetime',
+            'guest_accepted_at' => 'datetime',
             'last_activity_at' => 'datetime',
         ];
     }
@@ -107,6 +123,8 @@ class Game extends Model
      *
      * Compared in constant time, and against both seats rather than a claimed
      * one: the caller says what it has, never which seat it is.
+     *
+     * @return 'host'|'guest'|null
      */
     public function seatFor(?string $token): ?string
     {
@@ -127,7 +145,12 @@ class Game extends Model
         return null;
     }
 
-    /** The other seat. Takes a seat rather than a token — callers have one. */
+    /**
+     * The other seat. Takes a seat rather than a token — callers have one.
+     *
+     * @param  'host'|'guest'  $seat
+     * @return 'host'|'guest'
+     */
     public function opposingSeat(string $seat): string
     {
         return $seat === 'host' ? 'guest' : 'host';
@@ -162,6 +185,95 @@ class Game extends Model
         $deck = $this->deckFor($seat);
 
         return is_string($deck['name'] ?? null) ? $deck['name'] : null;
+    }
+
+    /**
+     * The board a seat last saved, or null before it has saved one.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function stateFor(string $seat): ?array
+    {
+        return $this->{"{$seat}_state"};
+    }
+
+    /**
+     * The redacted board a seat last saved, to seed the other side's mirror.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function publicStateFor(string $seat): ?array
+    {
+        return $this->{"{$seat}_public_state"};
+    }
+
+    // ── The match ───────────────────────────────────────────────────────────
+
+    /**
+     * Which seats have accepted the match.
+     *
+     * @return array<string, bool>
+     */
+    public function acceptance(): array
+    {
+        return [
+            'host' => $this->host_accepted_at !== null,
+            'guest' => $this->guest_accepted_at !== null,
+        ];
+    }
+
+    /**
+     * Both seats in, so boards may be relayed.
+     *
+     * A seat playing alone has accepted nothing, and its board is its own until
+     * it says otherwise.
+     */
+    public function matchIsLive(): bool
+    {
+        return $this->host_accepted_at !== null && $this->guest_accepted_at !== null;
+    }
+
+    /**
+     * Accept on this seat's behalf. Idempotent: the first answer is the one kept.
+     *
+     * Drops the boards the acceptance discards. Both halves are re-dealt in the
+     * browser when a match starts, and a saved board left behind would be
+     * restored over the fresh one by anyone who refreshed before it first saved.
+     *
+     * @param  'host'|'guest'  $seat
+     */
+    public function acceptFor(string $seat): void
+    {
+        if ($this->{"{$seat}_accepted_at"} !== null) {
+            return;
+        }
+
+        $this->forceFill([
+            "{$seat}_accepted_at" => now(),
+            'last_activity_at' => now(),
+            ...$this->clearedBoard($seat),
+        ])->save();
+
+        // The other seat has been playing alone while it waited, and that board
+        // goes too — it is the hand they goldfished, not one they were dealt.
+        if ($this->matchIsLive()) {
+            $this->forceFill($this->clearedBoard($this->opposingSeat($seat)))->save();
+        }
+    }
+
+    /**
+     * The columns that make a seat's saved board absent.
+     *
+     * @param  'host'|'guest'  $seat
+     * @return array<string, null|int>
+     */
+    private function clearedBoard(string $seat): array
+    {
+        return [
+            "{$seat}_state" => null,
+            "{$seat}_public_state" => null,
+            "{$seat}_seq" => 0,
+        ];
     }
 
     public function touchActivity(): void

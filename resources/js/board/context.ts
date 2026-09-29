@@ -133,6 +133,22 @@ export function useBoardTokens(): Card[] {
 }
 
 /**
+ * True inside a read-only rendering of a board — the opponent's mirror.
+ *
+ * Cards do not drag, zones do not accept drops, and nothing opens a menu or
+ * reports itself to the keyboard. The mirror is a picture of someone else's
+ * board, and every action on it would be an action on a board this browser does
+ * not own.
+ */
+const BoardReadOnlyContext = createContext<boolean>(false);
+
+export const BoardReadOnlyProvider = BoardReadOnlyContext.Provider;
+
+export function useBoardReadOnly(): boolean {
+  return useContext(BoardReadOnlyContext);
+}
+
+/**
  * True while a multi-select group is being dragged. Selected cards read it to
  * dim in place alongside the one actually under the cursor, so it is visible
  * that the whole group is moving and not just the card you grabbed.

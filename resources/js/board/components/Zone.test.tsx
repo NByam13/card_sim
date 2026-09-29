@@ -1,10 +1,16 @@
 import { Card } from '@/types/cards';
-import { BoardDispatchProvider } from '../context';
+import { BoardDispatchProvider, BoardReadOnlyProvider } from '../context';
 import { CardInstance } from '../types';
 import { DndContext } from '@dnd-kit/core';
 import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { useDroppable } from '@dnd-kit/core';
 import Zone from './Zone';
+
+vi.mock('@dnd-kit/core', async () => {
+  const actual = await vi.importActual<typeof import('@dnd-kit/core')>('@dnd-kit/core');
+  return { ...actual, useDroppable: vi.fn(actual.useDroppable) };
+});
 
 function inst(uid: string): CardInstance {
   return {
@@ -95,5 +101,41 @@ describe('Zone', () => {
     // Every card is positioned, not flowed, so the row can never wrap.
     expect(row.querySelectorAll(':scope > .absolute')).toHaveLength(3);
     expect(row.className).not.toContain('flex-wrap');
+  });
+});
+
+/**
+ * The mirror renders the same zone ids as your own board, inside the same
+ * DndContext — `BoardShell` puts its `header` inside it. dnd-kit keys
+ * droppables by id and a later registration replaces an earlier one, so a
+ * mirror zone registering as `reveal` would take the real Reveal Zone's place
+ * in the registry as a disabled container, and nothing on your own board would
+ * accept a drop for the rest of the match.
+ */
+describe('Zone in a mirror', () => {
+  const idsUsed = () =>
+    vi.mocked(useDroppable).mock.calls.map(([args]) => args as { id: string; disabled?: boolean });
+
+  it('registers its droppable under the id it was given', () => {
+    vi.mocked(useDroppable).mockClear();
+    renderZone({ id: 'reveal' });
+
+    expect(idsUsed().at(-1)).toMatchObject({ id: 'reveal', disabled: false });
+  });
+
+  it('never registers a read-only zone under your board’s id', () => {
+    vi.mocked(useDroppable).mockClear();
+    render(
+      <BoardReadOnlyProvider value={true}>
+        <DndContext>
+          <Zone id="reveal" label="Reveal Zone" cards={[]} />
+        </DndContext>
+      </BoardReadOnlyProvider>
+    );
+
+    const registered = idsUsed().at(-1)!;
+
+    expect(registered.id).not.toBe('reveal');
+    expect(registered.disabled).toBe(true);
   });
 });

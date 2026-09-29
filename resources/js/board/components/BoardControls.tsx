@@ -22,7 +22,8 @@ export interface BoardControlsProps {
   /** Whether the one mulligan (rules 103.4.1c) has already been spent. */
   mulliganed: boolean;
   onMulligan: () => void;
-  onRestart: () => void;
+  /** Null in a live match, where re-dealing your own board alone is not offered. */
+  onRestart: (() => void) | null;
   onShuffleLibrary: () => void;
   onDraw: () => void;
   onNextTurn: () => void;
@@ -86,9 +87,11 @@ export default function BoardControls({
           </button>
         </div>
       )}
-      <button onClick={onRestart} className={RAIL_BTN}>
-        Restart
-      </button>
+      {onRestart && (
+        <button onClick={onRestart} className={RAIL_BTN}>
+          Restart
+        </button>
+      )}
       <button onClick={onShuffleLibrary} className={RAIL_BTN}>
         Shuffle
       </button>
