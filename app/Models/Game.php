@@ -123,6 +123,8 @@ class Game extends Model
      *
      * Compared in constant time, and against both seats rather than a claimed
      * one: the caller says what it has, never which seat it is.
+     *
+     * @return 'host'|'guest'|null
      */
     public function seatFor(?string $token): ?string
     {
@@ -143,7 +145,12 @@ class Game extends Model
         return null;
     }
 
-    /** The other seat. Takes a seat rather than a token — callers have one. */
+    /**
+     * The other seat. Takes a seat rather than a token — callers have one.
+     *
+     * @param  'host'|'guest'  $seat
+     * @return 'host'|'guest'
+     */
     public function opposingSeat(string $seat): string
     {
         return $seat === 'host' ? 'guest' : 'host';
@@ -232,6 +239,8 @@ class Game extends Model
      * Drops the boards the acceptance discards. Both halves are re-dealt in the
      * browser when a match starts, and a saved board left behind would be
      * restored over the fresh one by anyone who refreshed before it first saved.
+     *
+     * @param  'host'|'guest'  $seat
      */
     public function acceptFor(string $seat): void
     {
@@ -255,6 +264,7 @@ class Game extends Model
     /**
      * The columns that make a seat's saved board absent.
      *
+     * @param  'host'|'guest'  $seat
      * @return array<string, null|int>
      */
     private function clearedBoard(string $seat): array

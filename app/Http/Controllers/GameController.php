@@ -155,6 +155,7 @@ class GameController extends Controller
      * and hydrating their cards is the sync slice's job, from the frames they
      * choose to send.
      *
+     * @param  'host'|'guest'|null  $seat
      * @return array<string, mixed>
      */
     private function payload(Game $game, ?string $seat): array

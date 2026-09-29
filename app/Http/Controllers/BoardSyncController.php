@@ -70,7 +70,11 @@ class BoardSyncController extends Controller
         return response()->json(['saved' => true]);
     }
 
-    /** The caller's seat, or 403. A watcher has no board to send. */
+    /**
+     * The caller's seat, or 403. A watcher has no board to send.
+     *
+     * @return 'host'|'guest'
+     */
     private function seatOrAbort(Game $game, Request $request): string
     {
         $seat = Participant::fromRequest($request)?->roleIn($game);
