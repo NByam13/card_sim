@@ -1,8 +1,8 @@
 # Board Sync: Spec
 
-**Status:** Planned.
+**Status:** In progress.
 **Branch:** `feat/board-sync`
-**Last updated:** 2026-09-24
+**Last updated:** 2026-09-29
 
 ## Summary
 
@@ -166,6 +166,63 @@ the deck-was-edited case, and it is the reason a restore is allowed to fail quie
 `BoardArena` takes `savedState` and `onState` and neither has a caller. The local-board slice built
 and tested the seam without using it, so persistence lands as wiring rather than surgery.
 
+### Entering a two-player match is a handshake
+
+A seat can already be on a board before the other one exists: the local-board slice added "Play
+solo" so a host does not have to sit in the lobby waiting. When the second seat is taken, that
+player is mid-game, and the match cannot simply begin underneath them.
+
+So a match starts when **both seats have accepted it**, and a match starting re-deals **both**
+halves — reshuffled deck, fresh opening hand — exactly as if neither had played a card.
+
+- **A seat that has no board accepts by arriving.** Joining is accepting, recorded in the claim
+  itself; a host waiting in the lobby accepts when the second seat is taken. Neither has a board
+  for a match to start underneath, so the choice would be a click with one answer.
+- **A seat in solo play is asked.** Presence delivers the news; a modal asks whether to start the
+  match, and declining leaves their board untouched.
+- **Declining is not recorded, and is not final.** "Not accepted yet" is the whole state, so the
+  seat that declined keeps a standing invitation in the space opposite their board, and the seat
+  waiting is told who they are waiting for. Either can be the one to move.
+- **Why re-deal, and why both:** a solo board was dealt to goldfish an opening, often several
+  times. Carrying the hand you liked into a real match is the mulligan hole the next decision
+  closes, walked into by accident rather than by intent — and the seat that accepted first has
+  been goldfishing too while it waited, so re-dealing only the accepter would leave the hole open
+  on the other side of the table.
+
+The flag is a column rather than page state because both halves of it have to survive a refresh: a
+seat that declined and reloaded would otherwise be asked again, and the seat waiting on them would
+lose the only thing telling it why the table is empty.
+
+### Restart belongs to solo play
+
+`RESTART` re-deals your own board, and nothing else. That is the right tool for goldfishing and the
+wrong one for a match: it is not linked to the other seat, so it re-draws an opening hand in front
+of an opponent who does not re-draw theirs, which is a way around the mulligan rules PonyRec
+already enforces.
+
+It stays for a seat playing alone and is absent once a match is live.
+
+### The mirror has its own zoom
+
+Your half and their half are separate surfaces, looked at differently: one is where you work, the
+other is glanced at. They get separate controls and separate cookies, as PonyRec does.
+
+`zoom.ts` already defines the `opponent` surface and its cookie for exactly this, so the mirror
+reads and writes its own preference rather than sharing the board's.
+
+### Their Retire pile is a peek and a list
+
+Retire is a public zone, so it is already on the wire. Left undrawn it is the one public thing the
+mirror receives and hides, and a player cannot answer "what have they used" without asking.
+
+Drawn as PonyRec draws it: a small box in the mirror's strip showing the top card and a count — it
+must not cost the table height — and clicking anywhere on it opens a read-only, searchable list.
+Rows take the same hover preview every other public card on the table takes, so reading a retired
+card costs no click.
+
+Nothing in it acts. The board's own viewer offers tutor actions from the Retire pile; the mirror's
+offers none, because every action there would be an action on a board this browser does not own.
+
 ## Data model
 
 Columns this slice adds to `games`, per the PvP spec's table:
@@ -175,6 +232,7 @@ Columns this slice adds to `games`, per the PvP spec's table:
 | `host_state` / `guest_state` | json, nullable | The full compact board, to restore your own half |
 | `host_public_state` / `guest_public_state` | json, nullable | The redacted board, to seed the opponent's mirror on reload |
 | `host_seq` / `guest_seq` | integer, default 0 | The last saved frame's sequence |
+| `host_accepted_at` / `guest_accepted_at` | timestamp, nullable | When this seat accepted the match. Both set means it is live |
 
 `turn_stop`, `winner_seat` and the scoring columns stay absent until the slices that use them.
 
@@ -185,41 +243,52 @@ Columns this slice adds to `games`, per the PvP spec's table:
 - `POST /games/{code}/sync` — relay a redacted frame to the rest of the table. Seat from the
   session, `toOthers`, no write.
 - `POST /games/{code}/state` — debounced durable save.
+- `POST /games/{code}/accept` — this seat accepts the match. Seat from the session, idempotent.
 - `GET /cards/{number}` — the cached card lookup. Not under `/games`: it is catalogue data, not
   game data, and the cache is shared across games.
 
-**New on PonyRec:** a fetch-by-number card endpoint, public and throttled like
-`GET /api/decks/{code}`, returning `DeckCardResource`. Its own PR in that repo, first, the way
-`card_text` was.
+**On PonyRec:** `GET /api/cards/{card:card_number}`, public and throttled on its own limiter,
+returning `DeckCardResource`. Landed in that repo first, the way `card_text` did — PonyRec #172.
 
-**New event:** `BoardStateUpdated`, on the existing `game.{code}` presence channel, carrying the
-server-stamped seat.
+**New events**, both on the existing `game.{code}` presence channel:
+
+- `BoardStateUpdated`, carrying the server-stamped seat.
+- `MatchAccepted`, carrying the seat that accepted, so the other side stops waiting.
 
 ## Layout
 
 ```
 resources/js/board/sync/
-  types.ts        PublicState, WireInstance, StateFrame, FrameCursor, HIDDEN_ZONES
-  redact.ts       the choke point
-  acceptFrame.ts  frame ordering
-  persist.ts      compactState / expandState
-  useMirror.ts    a mirror from frames, with onCardLookup injected
-  useGameSync.ts  the channel binding: send, receive, announce
+  types.ts         PublicState, WireInstance, StateFrame, FrameCursor, HIDDEN_ZONES
+  redact.ts        the choke point
+  acceptFrame.ts   frame ordering
+  persist.ts       compactState / expandState
+  hydrate.ts       a PublicState into the shape the table draws
+  useMirror.ts     a mirror from frames, with onCardLookup injected
+  useBoardRelay.ts sending: relay every change, save once it settles
+  useGameSync.ts   the channel binding: presence, frames, announce
 ```
+
+Sending is its own hook rather than part of `useGameSync`, because the two answer to different
+things: one is bound to a channel's lifetime, the other to a board's changes.
 
 `board/mlp/MlpTable.tsx` gains a read-only mirrored rendering. Per the audit, this is the file that
 stops existing once the setup module lands — a second hand-mirrored copy is the largest drift risk
 there is, so the mirror is a mode of the same component, never a second component.
 
-## Open questions
+## Questions this slice closed
 
-- **Whose shuffle is authoritative?** Deferred here by the local-board spec. Both seats deal their
-  own deck from their own snapshot and neither needs the other's, so it may simply not arise until
-  a rules-affecting action does.
-- **What does "restart" mean with two seats?** Solo it re-deals. With an opponent it is a desync or
-  a rematch. Ported as-is for now, and the rematch reading belongs to the scoring slice.
-- **Does the mirror need its own zoom?** Your half and their half are separate scroll areas at the
-  same scale today. Two zoom controls may be one too many.
+- **Whose shuffle is authoritative?** Each seat's, over its own deck and nothing else. There is no
+  action in which one seat's shuffle reaches the other's library, and there must never be one —
+  which is the same rule the redaction choke point already enforces from the other side.
+- **What does "restart" mean with two seats?** Nothing. It is a solo affordance and is absent from
+  a live match, per the decision above. The rematch reading still belongs to the scoring slice.
+- **Does the mirror need its own zoom?** Yes, with its own cookie. See the decision above.
+
+## Still open
+
 - **How stale is too stale?** A seat that closes its tab leaves a mirror frozen at its last frame,
-  and presence already knows they are gone. Whether that should be said on screen, and how loudly,
-  is a design question this slice will surface.
+  and presence already knows they are gone. The mirror says "away" against the seat's name, which
+  is enough to not be misleading and less than the question deserves. It belongs to the seam bar —
+  the strip between the two halves that carries game information, as PonyRec's does — and is
+  deferred to the slice that adds it.
