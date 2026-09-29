@@ -29,7 +29,9 @@ Route::post('/games/{game}/sync', [BoardSyncController::class, 'relay'])->name('
 Route::post('/games/{game}/state', [BoardSyncController::class, 'save'])->name('games.state');
 
 // Cards a mirror meets that its own deck does not carry. `where` so a number
-// containing a dot still routes.
+// containing a dot still routes. Throttled because the number space is open and
+// a miss is never cached, so each one costs a round trip to PonyRec.
 Route::get('/cards/{number}', [CardController::class, 'show'])
     ->where('number', '.*')
+    ->middleware('throttle:120,1')
     ->name('cards.show');

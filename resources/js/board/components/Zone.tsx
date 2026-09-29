@@ -78,7 +78,14 @@ export default function Zone({
   style?: CSSProperties;
 }) {
   const readOnly = useBoardReadOnly();
-  const { setNodeRef, isOver } = useDroppable({ id, disabled: readOnly });
+  // dnd-kit keys droppables by id and a later registration replaces an earlier
+  // one. The mirror renders the same zone ids inside the board's own
+  // DndContext, so its zones have to answer to different ones or they would
+  // take your board's place in the registry and nothing would accept a drop.
+  const { setNodeRef, isOver } = useDroppable({
+    id: readOnly ? `mirror:${id}` : id,
+    disabled: readOnly,
+  });
   const scale = useBoardZoom();
 
   if (bare) {

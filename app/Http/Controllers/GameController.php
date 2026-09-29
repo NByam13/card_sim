@@ -113,6 +113,11 @@ class GameController extends Controller
 
         abort_if($seat === null, 403, 'Only a seated player can accept a match.');
 
+        // Accepting before the other seat exists would go live the moment it is
+        // claimed — joining is accepting — and nothing would clear the board
+        // this seat built while it waited.
+        abort_if($game->status !== 'active', 403, 'There is no second seat to accept yet.');
+
         $game->acceptFor($seat);
 
         MatchAccepted::dispatch($game->refresh(), $seat);
@@ -179,8 +184,12 @@ class GameController extends Controller
             'saved_state' => $seat ? $game->stateFor($seat) : null,
             // The opponent's redacted board, so their mirror is not blank until
             // they next move. Already stripped of everything hidden by the
-            // browser that saved it; this only passes it on.
-            'opponent_state' => $seat ? $game->publicStateFor($game->opposingSeat($seat)) : null,
+            // browser that saved it; this only passes it on. Withheld until the
+            // match is live, on the same rule the relay follows: a board played
+            // alone is nobody else's business.
+            'opponent_state' => $seat && $game->matchIsLive()
+                ? $game->publicStateFor($game->opposingSeat($seat))
+                : null,
         ];
     }
 }

@@ -38,12 +38,12 @@ export function useMirror(
   }, []);
 
   // A fresh server snapshot replaces the mirror and resets ordering: it may lag
-  // the live frames by a save debounce, and the next frame corrects it.
+  // the live frames by a save debounce, and the next frame corrects it. A null
+  // snapshot clears it rather than leaving the last one standing — the server
+  // having no board for that seat is an answer, not a missing one.
   useEffect(() => {
-    if (!initial) return;
-
     cursor.current = null;
-    setState(initial);
+    setState(initial ?? null);
   }, [initial]);
 
   const lookupRef = useRef(lookup);

@@ -27,6 +27,11 @@ class BoardSyncController extends Controller
     {
         $seat = $this->seatOrAbort($game, $request);
 
+        // A board played alone is nobody else's business. The browser already
+        // holds its frames back until the match is live; this is the same rule
+        // where it can actually be enforced.
+        abort_if(! $game->matchIsLive(), 403, 'The match has not started yet.');
+
         $validated = $request->validate([
             'session' => ['required', 'string', 'max:64'],
             'seq' => ['required', 'integer', 'min:0'],

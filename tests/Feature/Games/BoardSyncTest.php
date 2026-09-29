@@ -24,6 +24,12 @@ class BoardSyncTest extends TestCase
         return Game::factory()->hostToken('host-token')->guestToken('guest-token')->create();
     }
 
+    /** The same game, with both seats having accepted the match. */
+    private function liveGame(): Game
+    {
+        return Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->create();
+    }
+
     /** @return array<string, mixed> */
     private function frame(int $seq = 1): array
     {
@@ -42,7 +48,7 @@ class BoardSyncTest extends TestCase
     public function test_a_seat_relays_its_board_to_the_table(): void
     {
         Event::fake([BoardStateUpdated::class]);
-        $game = $this->activeGame();
+        $game = $this->liveGame();
 
         $this->asHost($game)
             ->postJson("/games/{$game->code}/sync", $this->frame(3))
@@ -61,7 +67,7 @@ class BoardSyncTest extends TestCase
     public function test_the_seat_comes_from_the_session_not_the_payload(): void
     {
         Event::fake([BoardStateUpdated::class]);
-        $game = $this->activeGame();
+        $game = $this->liveGame();
 
         $this->asHost($game)
             ->postJson("/games/{$game->code}/sync", [...$this->frame(), 'seat' => 'guest'])
@@ -73,7 +79,7 @@ class BoardSyncTest extends TestCase
     public function test_a_watcher_cannot_relay_a_board(): void
     {
         Event::fake([BoardStateUpdated::class]);
-        $game = $this->activeGame();
+        $game = $this->liveGame();
 
         $this->postJson("/games/{$game->code}/sync", $this->frame())->assertForbidden();
 
@@ -95,7 +101,7 @@ class BoardSyncTest extends TestCase
     public function test_relaying_writes_nothing(): void
     {
         Event::fake([BoardStateUpdated::class]);
-        $game = $this->activeGame();
+        $game = $this->liveGame();
 
         $this->asHost($game)->postJson("/games/{$game->code}/sync", $this->frame())->assertOk();
 
@@ -183,7 +189,7 @@ class BoardSyncTest extends TestCase
      */
     public function test_a_seat_is_given_only_the_opponents_redacted_board(): void
     {
-        $game = $this->activeGame();
+        $game = $this->liveGame();
         $game->forceFill([
             'guest_state' => ['zones' => ['hand' => [['uid' => 'secret', 'cardNumber' => 'TEST-C01']]]],
             'guest_public_state' => ['counts' => ['hand' => 1], 'zones' => []],
@@ -193,6 +199,18 @@ class BoardSyncTest extends TestCase
 
         $response->assertInertia(fn ($page) => $page->where('game.opponent_state.counts.hand', 1));
         $this->assertStringNotContainsString('secret', $response->getContent());
+    }
+
+    /** A solo board is nobody else's business until both seats have accepted. */
+    public function test_a_seat_is_not_given_the_other_ones_board_before_the_match_is_live(): void
+    {
+        $game = $this->activeGame();
+        $game->forceFill(['guest_public_state' => ['counts' => ['hand' => 1], 'zones' => []]])->save();
+
+        $this->asHost($game)
+            ->get("/games/{$game->code}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('game.opponent_state', null));
     }
 
     public function test_a_watcher_is_given_neither_board(): void
@@ -228,7 +246,7 @@ class BoardSyncTest extends TestCase
     #[DataProvider('badFrames')]
     public function test_a_malformed_frame_is_refused(array $frame): void
     {
-        $game = $this->activeGame();
+        $game = $this->liveGame();
 
         $this->asHost($game)
             ->postJson("/games/{$game->code}/sync", $frame)
