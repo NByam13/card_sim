@@ -51,7 +51,8 @@ function card(cardNumber: string): CardInstance {
   };
 }
 
-const relay = (enabled = true) => renderHook(() => useBoardRelay({ code: 'abc123', enabled }));
+const relay = (relaying = true, saving = relaying) =>
+  renderHook(() => useBoardRelay({ code: 'abc123', relaying, saving }));
 
 beforeEach(() => {
   posted.mockClear();
@@ -112,6 +113,21 @@ describe('useBoardRelay', () => {
     act(() => vi.advanceTimersByTime(5000));
 
     expect(posted).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A seat playing alone in an active game still resumes on refresh; what it
+   * must not do is put that board in front of an opponent who has not started
+   * the match.
+   */
+  it('saves a board it is not relaying', () => {
+    const { result } = relay(false, true);
+
+    act(() => result.current.publish(boardWith()));
+    act(() => vi.advanceTimersByTime(5000));
+
+    expect(callsTo('/sync')).toHaveLength(0);
+    expect(callsTo('/state')).toHaveLength(1);
   });
 
   describe('saving', () => {

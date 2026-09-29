@@ -57,6 +57,7 @@ export default function BoardArena({
   scale,
   savedState,
   onState,
+  canRestart = true,
   header,
 }: {
   deck: Deck;
@@ -66,6 +67,12 @@ export default function BoardArena({
   savedState?: GameState | null;
   /** Fires with every new game state, including the initial one on mount. */
   onState?: (state: GameState) => void;
+  /**
+   * Offer Restart. False in a live match: it re-deals this board and only this
+   * board, which is a way around mulligan rules in front of an opponent who does
+   * not re-draw with you.
+   */
+  canRestart?: boolean;
   /**
    * Caller chrome that scrolls above the table. Handed to the shell so it lands
    * inside the scroll area; rendering it here as a sibling would pin it above
@@ -260,7 +267,7 @@ export default function BoardArena({
         onStartGame={() => dispatch({ type: 'START_GAME' })}
         mulliganed={state.mulliganed}
         onMulligan={() => dispatch({ type: 'MULLIGAN' })}
-        onRestart={() => dispatch({ type: 'RESTART' })}
+        onRestart={canRestart ? () => dispatch({ type: 'RESTART' }) : null}
         onShuffleLibrary={() => dispatch({ type: 'SHUFFLE_LIBRARY' })}
         onDraw={draw}
         onNextTurn={nextTurn}

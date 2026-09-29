@@ -1,6 +1,6 @@
 import { http } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/types/cards';
 import { Seat, StateFrame } from './types';
 
@@ -13,6 +13,9 @@ interface Member {
 interface RelayedFrame extends StateFrame {
   seat: Seat;
 }
+
+/** Who is ready to play whom, as the server last recorded it. */
+export type Acceptance = Record<Seat, boolean>;
 
 /**
  * The game's live channel while a board is on screen: who is here, and the
@@ -34,6 +37,8 @@ export function useGameSync({
   seat,
   onFrame,
   onAnnounce,
+  onSeatClaimed,
+  onAccepted,
 }: {
   code: string;
   seat: Seat;
@@ -41,13 +46,17 @@ export function useGameSync({
   onFrame: (frame: StateFrame) => void;
   /** Someone arrived, or we (re)subscribed: send a frame so they are not blank. */
   onAnnounce: () => void;
+  /** The other seat was taken while this board was on screen. */
+  onSeatClaimed: () => void;
+  /** A seat accepted the match. Carries both answers, not just the sender's. */
+  onAccepted: (accepted: Acceptance) => void;
 }): { opponentPresent: boolean; watching: number } {
   const [opponentPresent, setOpponentPresent] = useState(false);
   const [watching, setWatching] = useState(0);
 
   // Handlers ride a ref so a new closure does not tear the subscription down.
-  const handlers = useRef({ onFrame, onAnnounce });
-  handlers.current = { onFrame, onAnnounce };
+  const handlers = useRef({ onFrame, onAnnounce, onSeatClaimed, onAccepted });
+  handlers.current = { onFrame, onAnnounce, onSeatClaimed, onAccepted };
 
   const { channel } = useEchoPresence(`game.${code}`, [], () => {});
 
@@ -78,6 +87,12 @@ export function useGameSync({
         if (from === seat) return;
         handlers.current.onFrame(frame);
       })
+      // A seat taken while a board is already on screen. Presence says someone
+      // arrived; only this says they arrived as a player.
+      .listen('.seat.claimed', () => handlers.current.onSeatClaimed())
+      .listen('.match.accepted', ({ accepted }: { accepted: Acceptance }) =>
+        handlers.current.onAccepted(accepted)
+      )
       .error((error: unknown) => console.error('game channel subscription failed', error));
   }, [channel, seat]);
 

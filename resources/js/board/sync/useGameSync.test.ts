@@ -67,9 +67,13 @@ const frame = (seat: Seat, seq = 1): StateFrame & { seat: Seat } => ({
 function sync(seat: Seat = 'host') {
   const onFrame = vi.fn();
   const onAnnounce = vi.fn();
-  const view = renderHook(() => useGameSync({ code: 'abc123', seat, onFrame, onAnnounce }));
+  const onSeatClaimed = vi.fn();
+  const onAccepted = vi.fn();
+  const view = renderHook(() =>
+    useGameSync({ code: 'abc123', seat, onFrame, onAnnounce, onSeatClaimed, onAccepted })
+  );
 
-  return { ...view, onFrame, onAnnounce };
+  return { ...view, onFrame, onAnnounce, onSeatClaimed, onAccepted };
 }
 
 beforeEach(() => {
@@ -174,6 +178,31 @@ describe('useGameSync', () => {
     sync('host');
 
     expect(presence.listenForWhisper).not.toHaveBeenCalled();
-    expect(Object.keys(presence.bound.events)).toEqual(['.board.state']);
+    expect(Object.keys(presence.bound.events)).toEqual([
+      '.board.state',
+      '.seat.claimed',
+      '.match.accepted',
+    ]);
+  });
+
+  it('reports a seat claimed while the board is on screen', () => {
+    const { onSeatClaimed } = sync('host');
+
+    act(() => presence.bound.events['.seat.claimed']?.({}));
+
+    expect(onSeatClaimed).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes on both seats’ answers when one accepts, not just the sender’s', () => {
+    const { onAccepted } = sync('host');
+
+    act(() =>
+      presence.bound.events['.match.accepted']?.({
+        seat: 'guest',
+        accepted: { host: false, guest: true },
+      })
+    );
+
+    expect(onAccepted).toHaveBeenCalledWith({ host: false, guest: true });
   });
 });

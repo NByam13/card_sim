@@ -47,6 +47,8 @@ class Game extends Model
         'guest_public_state',
         'host_seq',
         'guest_seq',
+        'host_accepted_at',
+        'guest_accepted_at',
         'last_activity_at',
     ];
 
@@ -76,6 +78,8 @@ class Game extends Model
             'guest_public_state' => 'array',
             'host_seq' => 'integer',
             'guest_seq' => 'integer',
+            'host_accepted_at' => 'datetime',
+            'guest_accepted_at' => 'datetime',
             'last_activity_at' => 'datetime',
         ];
     }
@@ -194,6 +198,72 @@ class Game extends Model
     public function publicStateFor(string $seat): ?array
     {
         return $this->{"{$seat}_public_state"};
+    }
+
+    // ── The match ───────────────────────────────────────────────────────────
+
+    /**
+     * Which seats have accepted the match.
+     *
+     * @return array<string, bool>
+     */
+    public function acceptance(): array
+    {
+        return [
+            'host' => $this->host_accepted_at !== null,
+            'guest' => $this->guest_accepted_at !== null,
+        ];
+    }
+
+    /**
+     * Both seats in, so boards may be relayed.
+     *
+     * A seat playing alone has accepted nothing, and its board is its own until
+     * it says otherwise.
+     */
+    public function matchIsLive(): bool
+    {
+        return $this->host_accepted_at !== null && $this->guest_accepted_at !== null;
+    }
+
+    /**
+     * Accept on this seat's behalf. Idempotent: the first answer is the one kept.
+     *
+     * Drops the boards the acceptance discards. Both halves are re-dealt in the
+     * browser when a match starts, and a saved board left behind would be
+     * restored over the fresh one by anyone who refreshed before it first saved.
+     */
+    public function acceptFor(string $seat): void
+    {
+        if ($this->{"{$seat}_accepted_at"} !== null) {
+            return;
+        }
+
+        $this->forceFill([
+            "{$seat}_accepted_at" => now(),
+            'last_activity_at' => now(),
+            ...$this->clearedBoard($seat),
+        ])->save();
+
+        // The other seat has been playing alone while it waited, and that board
+        // goes too — it is the hand they goldfished, not one they were dealt.
+        if ($this->matchIsLive()) {
+            $this->forceFill($this->clearedBoard($this->opposingSeat($seat)))->save();
+        }
+    }
+
+    /**
+     * The columns that make a seat's saved board absent.
+     *
+     * @return array<string, null|int>
+     */
+    private function clearedBoard(string $seat): array
+    {
+        return [
+            "{$seat}_state" => null,
+            "{$seat}_public_state" => null,
+            "{$seat}_seq" => 0,
+        ];
     }
 
     public function touchActivity(): void

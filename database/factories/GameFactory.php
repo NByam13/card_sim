@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Games\Seating;
 use App\Models\Game;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -37,7 +38,12 @@ class GameFactory extends Factory
         return $this->state(fn () => ['host_token_hash' => Game::hashToken($token)]);
     }
 
-    /** Give the guest seat a token the test knows, and start the game. */
+    /**
+     * Give the guest seat a token the test knows, and start the game.
+     *
+     * Accepted, as {@see Seating::claimGuestSeat} leaves it: a seat
+     * that joins has no board for a match to start underneath.
+     */
     public function guestToken(string $token): static
     {
         return $this->state(fn () => [
@@ -46,7 +52,14 @@ class GameFactory extends Factory
             'guest_deck_code' => Str::lower(Str::random(12)),
             'guest_deck' => self::deck('Guest deck'),
             'status' => 'active',
+            'guest_accepted_at' => now(),
         ]);
+    }
+
+    /** Both seats in, so boards are relayed between them. */
+    public function matchLive(): static
+    {
+        return $this->state(fn () => ['host_accepted_at' => now()]);
     }
 
     public function finished(): static

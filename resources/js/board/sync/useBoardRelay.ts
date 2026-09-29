@@ -19,11 +19,14 @@ const SAVE_DEBOUNCE_MS = 1500;
  */
 export function useBoardRelay({
   code,
-  enabled,
+  relaying,
+  saving,
 }: {
   code: string;
-  /** Off until there is somebody to relay to, and for a watcher, who has no board. */
-  enabled: boolean;
+  /** Off until the match is live. A board played alone is nobody else's business. */
+  relaying: boolean;
+  /** Off until the game is active, which is the same rule the endpoint enforces. */
+  saving: boolean;
 }): {
   /** Called with every new board state. */
   publish: (state: GameState) => void;
@@ -36,8 +39,12 @@ export function useBoardRelay({
   const seq = useRef(0);
   const latest = useRef<{ state: GameState; publicState: PublicState } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const enabledRef = useRef(enabled);
-  enabledRef.current = enabled;
+  // Refs, so a gate opening does not rebuild `publish` and cost the board a
+  // render on every change to either.
+  const relayingRef = useRef(relaying);
+  relayingRef.current = relaying;
+  const savingRef = useRef(saving);
+  savingRef.current = saving;
 
   const relay = useCallback(
     (publicState: PublicState) => {
@@ -54,7 +61,7 @@ export function useBoardRelay({
 
   const save = useCallback(() => {
     const current = latest.current;
-    if (!current) return;
+    if (!current || !savingRef.current) return;
 
     postJson(`/games/${code}/state`, {
       seq: seq.current,
@@ -68,18 +75,20 @@ export function useBoardRelay({
       const publicState = redact(state);
       latest.current = { state, publicState };
 
-      if (!enabledRef.current) return;
+      if (relayingRef.current) {
+        relay(publicState);
+      }
 
-      relay(publicState);
-
-      clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(save, SAVE_DEBOUNCE_MS);
+      if (savingRef.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(save, SAVE_DEBOUNCE_MS);
+      }
     },
     [relay, save]
   );
 
   const announce = useCallback(() => {
-    if (!enabledRef.current || !latest.current) return;
+    if (!relayingRef.current || !latest.current) return;
 
     relay(latest.current.publicState);
   }, [relay]);

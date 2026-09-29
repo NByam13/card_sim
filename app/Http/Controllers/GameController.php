@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\GameCancelled;
+use App\Events\MatchAccepted;
 use App\Games\Participant;
 use App\Games\ParticipantSession;
 use App\Games\PonyRec\DeckClient;
@@ -98,6 +99,29 @@ class GameController extends Controller
         return to_route('games.show', $game);
     }
 
+    /**
+     * Accept the match: this seat is ready to play the other one.
+     *
+     * A seat arriving from the lobby calls this on arrival, having no board to
+     * lose. A seat playing alone calls it when the player says so. The board is
+     * re-dealt in the browser either way — the server only records the answer
+     * and tells the other seat.
+     */
+    public function accept(Game $game, Request $request): RedirectResponse
+    {
+        $seat = Participant::fromRequest($request)?->roleIn($game);
+
+        abort_if($seat === null, 403, 'Only a seated player can accept a match.');
+
+        $game->acceptFor($seat);
+
+        MatchAccepted::dispatch($game->refresh(), $seat);
+
+        // A full re-render on purpose: the board deals fresh from props that no
+        // longer carry a saved state, which is what accepting means.
+        return to_route('games.show', $game);
+    }
+
     /** Cancel a game nobody joined. Host only, and only while waiting. */
     public function destroy(Game $game, Request $request): RedirectResponse
     {
@@ -147,6 +171,9 @@ class GameController extends Controller
                 ],
             ],
             'you' => $seat,
+            // Which seats are ready to play each other. A seat playing alone has
+            // accepted nothing, and boards are only relayed once both have.
+            'accepted' => $game->acceptance(),
             // Null for a watcher, who has no board of their own to deal.
             'deck' => $seat ? $game->deckFor($seat) : null,
             'saved_state' => $seat ? $game->stateFor($seat) : null,

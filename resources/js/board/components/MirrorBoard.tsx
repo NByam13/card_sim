@@ -9,6 +9,8 @@ import {
 import { MlpGameZone } from '../mlp/MlpTable';
 import { EMPTY_SELECTION } from '../selection';
 import { MirrorState } from '../sync/hydrate';
+import MirrorRetire from './MirrorRetire';
+import ZoomControls from './ZoomControls';
 
 /**
  * The opponent's half of the table: their board, drawn read-only and flipped so
@@ -24,12 +26,15 @@ import { MirrorState } from '../sync/hydrate';
 export default function MirrorBoard({
   state,
   scale,
+  onScaleChange,
   backs,
   name,
   present,
 }: {
   state: MirrorState | null;
   scale: number;
+  /** The mirror keeps its own scale: it is glanced at where your board is worked on. */
+  onScaleChange: (next: number) => void;
   /** The shared backs, which every deck's snapshot carries identically. */
   backs: CardBacks | null;
   name: string;
@@ -55,12 +60,19 @@ export default function MirrorBoard({
             }}
           >
             <div className="space-y-1">
-              <div className="flex items-baseline justify-between px-1 text-xs text-gray-500">
+              <div className="flex items-center justify-between gap-3 px-1 text-xs text-gray-500">
                 <span className="font-medium text-gray-700">{name}</span>
-                <span>
-                  {HIDDEN_ZONES.map((zone) => `${LABELS[zone]} ${state.counts[zone]}`).join(' · ')}
-                  {!present && ' · away'}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span>
+                    {HIDDEN_ZONES.map((zone) => `${LABELS[zone]} ${state.counts[zone]}`).join(
+                      ' · '
+                    )}
+                    {!present && ' · away'}
+                  </span>
+                  {/* Public, so it is shown rather than counted. */}
+                  <MirrorRetire cards={state.zones.retire} scale={scale} />
+                  <ZoomControls scale={scale} onChange={onScaleChange} />
+                </div>
               </div>
 
               <MlpGameZone

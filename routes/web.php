@@ -20,6 +20,8 @@ Route::post('/games/{game}/join', [GameController::class, 'join'])
     ->middleware('throttle:10,1')
     ->name('games.join');
 
+Route::post('/games/{game}/accept', [GameController::class, 'accept'])->name('games.accept');
+
 Route::delete('/games/{game}', [GameController::class, 'destroy'])->name('games.destroy');
 
 // A seat's board, leaving the browser. Both derive the seat from the session.
