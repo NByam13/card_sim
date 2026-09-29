@@ -1,6 +1,6 @@
 # Board Sync: Spec
 
-**Status:** In progress.
+**Status:** Built. Two browsers played a match on the branch; manually verified, ready to merge.
 **Branch:** `feat/board-sync`
 **Last updated:** 2026-09-29
 
