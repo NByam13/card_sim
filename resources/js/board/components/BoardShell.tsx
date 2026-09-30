@@ -125,6 +125,7 @@ export default function BoardShell({
   backs,
   header,
   gameZone,
+  rail,
   outOfPlayBar,
   selection,
   setSelection,
@@ -143,6 +144,11 @@ export default function BoardShell({
   header?: ReactNode;
   /** The table itself, laid out by the game setup. Scrolls. */
   gameZone: ReactNode;
+  /**
+   * The controls, in a column beside the scroll area rather than inside the
+   * table, so the header above the table gets the table's full width.
+   */
+  rail?: ReactNode;
   /**
    * The bar of out-of-play piles and the hand. A sibling of the scroll area
    * rather than a `sticky` child of it: dnd-kit resolves a droppable's
@@ -301,9 +307,23 @@ export default function BoardShell({
                   }}
                 >
                   <div className="flex min-h-0 flex-1 flex-col">
-                    <div className="flex flex-1 flex-col overflow-y-auto px-4 pt-3 pb-4 sm:px-6 lg:px-8">
-                      {header}
-                      {gameZone}
+                    <div className="flex min-h-0 flex-1">
+                      <div className="flex flex-1 flex-col overflow-y-auto px-4 pt-3 pb-4 sm:px-6 lg:px-8">
+                        {header}
+                        {gameZone}
+                      </div>
+
+                      {/* Opted out of the marquee, since dragging from a gap between
+                          two buttons is a slip rather than an attempt to select the
+                          board. Opted back into text selection, so a log can be copied. */}
+                      {rail && (
+                        <div
+                          data-no-marquee
+                          className="flex shrink-0 flex-col items-center space-y-2 overflow-y-auto py-3 pr-4 select-text sm:pr-6 lg:pr-8"
+                        >
+                          {rail}
+                        </div>
+                      )}
                     </div>
 
                     {outOfPlayBar({ cardsRef: handCardsRef, dropIndex: handDropIndex })}

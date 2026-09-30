@@ -366,13 +366,13 @@ export default function BoardArena({
                 )}
               </>
             }
+            rail={controls}
             gameZone={
               <MlpGameZone
                 state={state}
                 scale={scale}
                 selection={selection}
                 setSelection={setSelection}
-                controls={controls}
               />
             }
             outOfPlayBar={(hand) => (

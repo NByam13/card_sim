@@ -89,3 +89,33 @@ export function advanceLabel(cursor: TurnCursor): string | null {
 
   return stopLabel(move.turn_stop);
 }
+
+/** A stop as the seam bar draws it. `locked` stops are drawn but never reached by a press. */
+export interface DisplayStop {
+  key: 'start' | 'contact' | TurnStop;
+  label: string;
+  locked: boolean;
+}
+
+/**
+ * The strip the seam bar draws: `Start › Main › Contact › End`, where Contact
+ * opens into its lanes while the cursor is in one. Contact is drawn locked on
+ * the turns before it is legal, so the strip keeps its width.
+ */
+export function displayStops(turnNumber: number, turnStop: string | null): DisplayStop[] {
+  const inContact = turnStop?.startsWith('contact:') ?? false;
+  const contact: DisplayStop[] = inContact
+    ? (['contact:1', 'contact:2', 'contact:3'] as const).map((key) => ({
+        key,
+        label: stopLabel(key),
+        locked: false,
+      }))
+    : [{ key: 'contact', label: 'Contact', locked: turnNumber < FIRST_CONTACT_TURN }];
+
+  return [
+    { key: 'start', label: 'Start', locked: true },
+    { key: 'main', label: stopLabel('main'), locked: false },
+    ...contact,
+    { key: 'end', label: stopLabel('end'), locked: false },
+  ];
+}

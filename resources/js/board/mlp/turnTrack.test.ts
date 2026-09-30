@@ -3,6 +3,7 @@ import { TurnCursor } from '../sync/types';
 import {
   advanceLabel,
   CursorMove,
+  displayStops,
   FIRST_CONTACT_TURN,
   next,
   previous,
@@ -143,5 +144,34 @@ describe('advanceLabel', () => {
 
   it('has nothing to say when it is not your turn', () => {
     expect(advanceLabel(cursor({ turn_stop: 'main', my_turn: false }))).toBeNull();
+  });
+});
+
+describe('displayStops', () => {
+  const keys = (turnNumber: number, turnStop: string | null) =>
+    displayStops(turnNumber, turnStop).map((stop) => stop.key);
+
+  it('folds contact into one stop outside it', () => {
+    expect(keys(3, 'main')).toEqual(['start', 'main', 'contact', 'end']);
+  });
+
+  it('opens contact into its lanes while the cursor is in one', () => {
+    expect(keys(3, 'contact:2')).toEqual([
+      'start',
+      'main',
+      'contact:1',
+      'contact:2',
+      'contact:3',
+      'end',
+    ]);
+  });
+
+  it('draws contact locked before it is legal', () => {
+    const contact = displayStops(FIRST_CONTACT_TURN - 1, 'main').find((s) => s.key === 'contact');
+
+    expect(contact?.locked).toBe(true);
+    expect(displayStops(FIRST_CONTACT_TURN, 'main').find((s) => s.key === 'contact')?.locked).toBe(
+      false
+    );
   });
 });

@@ -30,6 +30,7 @@ export default function MirrorBoard({
   backs,
   name,
   present,
+  goingFirst,
 }: {
   state: MirrorState | null;
   scale: number;
@@ -39,6 +40,8 @@ export default function MirrorBoard({
   backs: CardBacks | null;
   name: string;
   present: boolean;
+  /** Whether the opponent is on the play, which numbers their lanes. Null until decided. */
+  goingFirst: boolean | null;
 }) {
   if (!state) {
     return (
@@ -76,11 +79,10 @@ export default function MirrorBoard({
               </div>
 
               <MlpGameZone
-                state={state}
+                state={{ ...state, goingFirst }}
                 scale={scale}
                 selection={EMPTY_SELECTION}
                 setSelection={() => {}}
-                controls={null}
                 mirrored
               />
             </div>

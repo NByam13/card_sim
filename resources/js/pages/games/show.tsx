@@ -344,6 +344,7 @@ function Playing({
                     backs={deck.card_backs ?? null}
                     name={opponentName}
                     present={opponentPresent}
+                    goingFirst={firstPlayer ? firstPlayer !== seat : null}
                   />
                 ) : (
                   <MatchPending

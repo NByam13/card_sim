@@ -82,6 +82,7 @@ describe('SeamBar', () => {
       );
 
       expect(screen.getByText('Twilight won the roll')).toBeTruthy();
+      expect(screen.getByText('Choosing who goes first…')).toBeTruthy();
       expect(screen.queryByRole('button')).toBeNull();
     });
   });
@@ -106,8 +107,7 @@ describe('SeamBar', () => {
         />
       );
 
-      expect(screen.getByText('Turn 3')).toBeTruthy();
-      expect(screen.getByText('Your turn')).toBeTruthy();
+      expect(screen.getByText('Turn 3 · You')).toBeTruthy();
       const stops = within(screen.getByRole('list', { name: 'Turn stops' }));
       expect(stops.getByText('Lane 1').getAttribute('aria-current')).toBe('step');
 
@@ -127,7 +127,7 @@ describe('SeamBar', () => {
         />
       );
 
-      expect(screen.getByText('Rarity’s turn')).toBeTruthy();
+      expect(screen.getByText('Turn 3 · Rarity')).toBeTruthy();
       expect(screen.getByText('Lane 1').getAttribute('aria-current')).toBe('step');
       expect(screen.queryByRole('button')).toBeNull();
     });
@@ -142,8 +142,7 @@ describe('SeamBar', () => {
         />
       );
 
-      expect(screen.getByText('Turn 3')).toBeTruthy();
-      expect(screen.getByText('Rarity’s turn')).toBeTruthy();
+      expect(screen.getByText('Turn 3 · Rarity')).toBeTruthy();
       expect(screen.queryByRole('button')).toBeNull();
     });
 
@@ -158,8 +157,8 @@ describe('SeamBar', () => {
         />
       );
 
-      expect(screen.getByText('Turn 1')).toBeTruthy();
-      expect(screen.getByText('Your turn')).toBeTruthy();
+      expect(screen.getByText('Turn 1 · You')).toBeTruthy();
+      expect(screen.getByText('Start').getAttribute('aria-current')).toBe('step');
       expect(screen.getByRole('button', { name: 'Start turn' })).toBeTruthy();
     });
 
