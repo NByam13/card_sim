@@ -25,6 +25,7 @@ export default function SeamBar({
   onRoll,
   onElect,
   onAdvance,
+  waiting,
 }: {
   /** Null for a watcher. */
   seat: Seat | null;
@@ -34,6 +35,8 @@ export default function SeamBar({
   onRoll?: () => void;
   onElect?: (firstPlayer: Seat) => void;
   onAdvance?: () => void;
+  /** Why the turn cannot move yet, shown in place of the advance button. */
+  waiting?: string;
 }) {
   const nameOf = (which: Seat) => (which === seat ? 'You' : names[which]);
   const { roll, first_player } = turnOrder;
@@ -87,7 +90,13 @@ export default function SeamBar({
           </span>
         </>
       }
-      action={label && onAdvance && <Button onClick={onAdvance}>{label}</Button>}
+      action={
+        label && onAdvance ? (
+          <Button onClick={onAdvance}>{label}</Button>
+        ) : (
+          waiting && <span className="text-gray-500">{waiting}</span>
+        )
+      }
     >
       <ol aria-label="Turn stops" className="flex items-center gap-1">
         {stopsForTurn(turnNumber).map((stop) => {

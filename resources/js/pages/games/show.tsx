@@ -314,9 +314,10 @@ function Playing({
           canRestart={!matchLive}
           turnCursor={matchLive ? turn : undefined}
           goingFirst={matchLive ? (firstPlayer ? firstPlayer === seat : null) : undefined}
+          opponentStarted={mirror?.started ?? false}
           seam={
             matchLive
-              ? (onAdvance) => (
+              ? ({ onAdvance, waiting }) => (
                   <div className="mb-3">
                     <SeamBar
                       seat={seat}
@@ -326,6 +327,7 @@ function Playing({
                       onRoll={order.roll}
                       onElect={order.elect}
                       onAdvance={onAdvance}
+                      waiting={waiting}
                     />
                   </div>
                 )

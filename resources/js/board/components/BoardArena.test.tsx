@@ -192,10 +192,12 @@ describe('BoardArena, in a match', () => {
     cursor = { turn_number: 3, active_seat: 'host', turn_stop: 'main', my_turn: true },
     savedState = boardWithRetiredCard(),
     goingFirst = true,
+    opponentStarted = true,
   }: {
     cursor?: TurnCursor;
     savedState?: GameState | null;
     goingFirst?: boolean | null;
+    opponentStarted?: boolean;
   } = {}) {
     const onState = vi.fn();
     const turnCursor = { cursor, advance: vi.fn(), stepBack: vi.fn() };
@@ -207,6 +209,7 @@ describe('BoardArena, in a match', () => {
         onState={onState}
         turnCursor={turnCursor}
         goingFirst={goingFirst}
+        opponentStarted={opponentStarted}
       />
     );
 
@@ -274,5 +277,41 @@ describe('BoardArena, in a match', () => {
 
     expect(latest().goingFirst).toBe(false);
     expect(screen.getByRole('button', { name: 'Start Game' })).toBeEnabled();
+  });
+
+  describe('opening turn 1', () => {
+    const opening: TurnCursor = {
+      turn_number: 0,
+      active_seat: null,
+      turn_stop: null,
+      my_turn: true,
+    };
+
+    it('waits for this board to Start Game', () => {
+      const { turnCursor } = matchArena({ cursor: opening, savedState: null });
+
+      fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+
+      expect(turnCursor.advance).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Start Game first' })).toBeDisabled();
+    });
+
+    it('waits for the opponent to Start Game', () => {
+      const { turnCursor } = matchArena({ cursor: opening, opponentStarted: false });
+
+      fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+
+      expect(turnCursor.advance).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Waiting for opponent' })).toBeDisabled();
+    });
+
+    it('opens once both boards have started', () => {
+      const { turnCursor } = matchArena({ cursor: opening });
+
+      fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+
+      expect(turnCursor.advance).toHaveBeenCalledOnce();
+      expect(screen.getByRole('button', { name: 'Start turn' })).toBeEnabled();
+    });
   });
 });

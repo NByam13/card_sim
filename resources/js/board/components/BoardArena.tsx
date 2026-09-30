@@ -64,6 +64,7 @@ export default function BoardArena({
   seam,
   turnCursor,
   goingFirst,
+  opponentStarted,
 }: {
   deck: Deck;
   /** Card zoom factor (the board itself stays at 1×; only cards scale). */
@@ -84,8 +85,11 @@ export default function BoardArena({
    * the board instead.
    */
   header?: ReactNode;
-  /** The seam bar, below `header`. Handed the same advance as the rail's turn button. */
-  seam?: (onAdvance: () => void) => ReactNode;
+  /**
+   * The seam bar, below `header`. Handed the same advance as the rail's turn
+   * button, or what it is waiting on instead.
+   */
+  seam?: (turn: { onAdvance?: () => void; waiting?: string }) => ReactNode;
   /**
    * The shared turn cursor in a live match. Absent in solo, where the next turn
    * is local alone.
@@ -101,6 +105,8 @@ export default function BoardArena({
    * until it is. Undefined in solo, where the board's own toggle decides.
    */
   goingFirst?: boolean | null;
+  /** Whether the opponent has pressed Start Game. Turn 1 waits for both boards. */
+  opponentStarted?: boolean;
 }) {
   const { state, dispatch } = useGame(deck, savedState);
   const { message, show, toast } = useToast();
@@ -208,14 +214,23 @@ export default function BoardArena({
   // The turn start runs after a round trip, so it must read the board as it is then.
   const nextTurnRef = useRef(nextTurn);
   nextTurnRef.current = nextTurn;
-  const advanceTurn = turnCursor ? () => turnCursor.advance(() => nextTurnRef.current()) : nextTurn;
-  const turnOrderPending = turnCursor !== undefined && goingFirst === null;
-  const matchAdvance = turnCursor && !turnOrderPending ? advanceLabel(turnCursor.cursor) : null;
-  const nextTurnLabel = !turnCursor
-    ? 'Next Turn'
-    : turnOrderPending
+  const opening = turnCursor?.cursor.turn_number === 0;
+  const waitingOn = !turnCursor
+    ? null
+    : goingFirst === null
       ? 'Deciding turn order'
-      : (matchAdvance ?? 'Not your turn');
+      : opening && !state.started
+        ? 'Start Game first'
+        : opening && !opponentStarted
+          ? 'Waiting for opponent'
+          : null;
+  const matchAdvance = turnCursor && !waitingOn ? advanceLabel(turnCursor.cursor) : null;
+  const nextTurnLabel = !turnCursor ? 'Next Turn' : (waitingOn ?? matchAdvance ?? 'Not your turn');
+  const advanceTurn = !turnCursor
+    ? nextTurn
+    : () => {
+        if (!waitingOn) turnCursor.advance(() => nextTurnRef.current());
+      };
 
   const revealScene = () => {
     if (state.zones.sceneDeck.length === 0) {
@@ -337,7 +352,7 @@ export default function BoardArena({
             header={
               <>
                 {header}
-                {seam?.(advanceTurn)}
+                {seam?.(waitingOn ? { waiting: waitingOn } : { onAdvance: advanceTurn })}
                 {issues.length > 0 && !noticeDismissed && (
                   <div className="mb-3 flex items-start justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
                     <span>Incomplete deck — playing what&rsquo;s here ({issues.join(', ')}).</span>

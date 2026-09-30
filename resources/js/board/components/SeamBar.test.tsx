@@ -162,5 +162,20 @@ describe('SeamBar', () => {
       expect(screen.getByText('Your turn')).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Start turn' })).toBeTruthy();
     });
+
+    it('says what the opening press is waiting on instead of offering it', () => {
+      render(
+        <SeamBar
+          seat="guest"
+          names={names}
+          cursor={cursor({ my_turn: true })}
+          turnOrder={decided}
+          waiting="Waiting for opponent"
+        />
+      );
+
+      expect(screen.getByText('Waiting for opponent')).toBeTruthy();
+      expect(screen.queryByRole('button')).toBeNull();
+    });
   });
 });
