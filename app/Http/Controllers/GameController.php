@@ -10,6 +10,8 @@ use App\Games\ParticipantSession;
 use App\Games\PonyRec\DeckClient;
 use App\Games\PonyRec\DeckImportFailed;
 use App\Games\Seating;
+use App\Http\Requests\AcceptMatchRequest;
+use App\Http\Requests\CancelGameRequest;
 use App\Http\Requests\ClaimSeatRequest;
 use App\Models\Game;
 use Illuminate\Http\RedirectResponse;
@@ -108,17 +110,9 @@ class GameController extends Controller
      * re-dealt in the browser either way — the server only records the answer
      * and tells the other seat.
      */
-    public function accept(Game $game, Request $request): RedirectResponse
+    public function accept(Game $game, AcceptMatchRequest $request): RedirectResponse
     {
-        // Accepting before the other seat exists would go live the moment it is
-        // claimed — joining is accepting — and nothing would clear the board
-        // this seat built while it waited.
-        $seat = $this->activeSeatOrAbort(
-            $game,
-            $request,
-            'Only a seated player can accept a match.',
-            'There is no second seat to accept yet.',
-        );
+        $seat = $request->seat();
 
         $game->acceptFor($seat);
 
@@ -130,13 +124,8 @@ class GameController extends Controller
     }
 
     /** Cancel a game nobody joined. Host only, and only while waiting. */
-    public function destroy(Game $game, Request $request): RedirectResponse
+    public function destroy(Game $game, CancelGameRequest $request): RedirectResponse
     {
-        $participant = Participant::fromRequest($request);
-
-        abort_if($participant?->roleIn($game) !== Seat::Host, 403, 'Only the host can cancel this game.');
-        abort_if($game->status !== 'waiting', 403, 'This game has already started.');
-
         $game->delete();
         ParticipantSession::forget($request, $game->code);
 

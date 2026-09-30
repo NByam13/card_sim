@@ -88,7 +88,8 @@ class TurnCursorTest extends TestCase
 
         $this->as(Seat::Guest, $game)
             ->postJson("/games/{$game->code}/cursor", ['ends_turn' => true])
-            ->assertForbidden();
+            ->assertForbidden()
+            ->assertJson(['message' => 'It is not your turn.']);
 
         $game->refresh();
         $this->assertSame(1, $game->turn_number);
