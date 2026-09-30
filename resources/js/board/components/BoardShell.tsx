@@ -5,7 +5,6 @@ import {
   DragOverlay,
   DragStartEvent,
   PointerSensor,
-  pointerWithin,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -18,6 +17,7 @@ import {
   BoardZoomProvider,
   CardBacks,
 } from '../context';
+import { pointerWithinVisible } from '../collision';
 import { useMarquee } from '../useMarquee';
 import { ALL_ZONES, CardInstance, GameState, rendersLandscape, ZoneId } from '../types';
 import { Action, nextPlanSlot } from '../useGame';
@@ -250,7 +250,7 @@ export default function BoardShell({
   }
 
   // Cards are draggable-only and zones droppable-only, so `over` is always a
-  // zone (or null when released outside any). pointerWithin keeps it from
+  // zone (or null when released outside any). pointerWithinVisible keeps it from
   // snapping to a neighbouring zone you are only passing over.
   function handleDragEnd(e: DragEndEvent) {
     const dragged = active?.uids ?? [String(e.active.id)];
@@ -297,7 +297,7 @@ export default function BoardShell({
               >
                 <DndContext
                   sensors={sensors}
-                  collisionDetection={pointerWithin}
+                  collisionDetection={pointerWithinVisible}
                   onDragStart={handleDragStart}
                   onDragMove={handleDragMove}
                   onDragEnd={handleDragEnd}
@@ -308,7 +308,10 @@ export default function BoardShell({
                 >
                   <div className="flex min-h-0 flex-1 flex-col">
                     <div className="flex min-h-0 flex-1">
-                      <div className="flex flex-1 flex-col overflow-y-auto px-4 pt-3 pb-4 sm:px-6 lg:px-8">
+                      <div
+                        data-drop-clip
+                        className="flex flex-1 flex-col overflow-y-auto px-4 pt-3 pb-4 sm:px-6 lg:px-8"
+                      >
                         {header}
                         {gameZone}
                       </div>
