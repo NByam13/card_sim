@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\Seat;
 use Closure;
 use Database\Factories\GameFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
@@ -367,19 +368,28 @@ class Game extends Model
         return $this->fillIfNull('first_player', $firstPlayer);
     }
 
-    /**
-     * Write a column only while it is still null. On success the model takes the
-     * written values without a reload; on failure it is left as it was.
-     */
+    /** Write a column only while it is still null. */
     private function fillIfNull(string $column, mixed $value): bool
     {
-        $columns = [$column, 'last_activity_at'];
+        return $this->fillWhere([$column => $value], fn (Builder $query) => $query->whereNull($column));
+    }
+
+    /**
+     * Write columns only while the row still matches `$unchanged`. On success the
+     * model takes the written values without a reload; on failure it is left as
+     * it was.
+     *
+     * @param  array<string, mixed>  $values
+     * @param  Closure(Builder<self>): Builder<self>  $unchanged
+     */
+    private function fillWhere(array $values, Closure $unchanged): bool
+    {
+        $columns = [...array_keys($values), 'last_activity_at'];
         $before = Arr::only($this->getAttributes(), $columns);
 
-        $this->forceFill([$column => $value, 'last_activity_at' => now()]);
+        $this->forceFill([...$values, 'last_activity_at' => now()]);
 
-        $filled = self::whereKey($this->id)
-            ->whereNull($column)
+        $filled = $unchanged(self::whereKey($this->id))
             ->update(Arr::only($this->getAttributes(), $columns)) === 1;
 
         if ($filled) {
@@ -405,6 +415,44 @@ class Game extends Model
     public function actingSeat(): ?Seat
     {
         return $this->active_seat ?? $this->first_player;
+    }
+
+    /**
+     * Move the cursor on the acting seat's behalf. Before the first turn this
+     * opens turn 1 for the first player; after it, ending the turn hands the
+     * next one to the other seat with no stop yet. Returns false when the turn
+     * changed hands since this model was read.
+     */
+    public function advanceCursor(?string $turnStop, bool $endsTurn): bool
+    {
+        $seat = $this->actingSeat();
+
+        $cursor = match (true) {
+            ! $this->turnStarted() => ['turn_number' => 1, 'active_seat' => $seat, 'turn_stop' => $turnStop],
+            $endsTurn => ['turn_number' => $this->turn_number + 1, 'active_seat' => $seat->opposing(), 'turn_stop' => null],
+            default => ['turn_stop' => $turnStop],
+        };
+
+        $turnNumber = $this->getRawOriginal('turn_number');
+        $activeSeat = $this->getRawOriginal('active_seat');
+
+        return $this->fillWhere($cursor, fn (Builder $query) => $query
+            ->where('turn_number', $turnNumber)
+            ->where('active_seat', $activeSeat));
+    }
+
+    /**
+     * The whole cursor, as it is broadcast and returned.
+     *
+     * @return array{turn_number: int, active_seat: string|null, turn_stop: string|null}
+     */
+    public function cursor(): array
+    {
+        return [
+            'turn_number' => $this->turn_number,
+            'active_seat' => $this->active_seat?->value,
+            'turn_stop' => $this->turn_stop,
+        ];
     }
 
     public function touchActivity(): void
