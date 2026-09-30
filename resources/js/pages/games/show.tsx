@@ -40,6 +40,14 @@ interface Game {
   opponent_state: PublicState | null;
 }
 
+/** The shared turn cursor, with whether it is this viewer's to move. */
+interface Cursor {
+  turn_number: number;
+  active_seat: Seat | null;
+  turn_stop: string | null;
+  my_turn: boolean;
+}
+
 interface Member {
   id: string;
   role: Role;
@@ -49,6 +57,7 @@ interface Member {
 interface Props {
   game: Game;
   seat: Seat | null;
+  cursor: Cursor;
   inviteUrl: string;
   canJoin: boolean;
   canCancel: boolean;

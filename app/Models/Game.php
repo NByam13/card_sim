@@ -458,6 +458,22 @@ class Game extends Model
         ];
     }
 
+    /** Whether this seat may move the cursor now. Always false for a watcher. */
+    public function isTurnOf(?Seat $seat): bool
+    {
+        return $seat !== null && $this->status === 'active' && $seat === $this->actingSeat();
+    }
+
+    /**
+     * The cursor as one viewer sees it, with whether it is theirs to move.
+     *
+     * @return array{turn_number: int, active_seat: string|null, turn_stop: string|null, my_turn: bool}
+     */
+    public function phaseState(?Seat $viewer): array
+    {
+        return [...$this->cursor(), 'my_turn' => $this->isTurnOf($viewer)];
+    }
+
     public function touchActivity(): void
     {
         $this->forceFill(['last_activity_at' => now()])->save();
