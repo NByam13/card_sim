@@ -1,7 +1,11 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PublicState, Seat, StateFrame } from './types';
-import { useGameSync } from './useGameSync';
+import { postJson, useGameSync } from './useGameSync';
+
+const request = vi.hoisted(() => vi.fn());
+
+vi.mock('@inertiajs/react', () => ({ http: { getClient: () => ({ request }) } }));
 
 vi.mock('@laravel/echo-react', () => ({
   useEchoPresence: () => ({ channel: () => presence }),
@@ -69,11 +73,20 @@ function sync(seat: Seat = 'host') {
   const onAnnounce = vi.fn();
   const onSeatClaimed = vi.fn();
   const onAccepted = vi.fn();
+  const onTurnAdvanced = vi.fn();
   const view = renderHook(() =>
-    useGameSync({ code: 'abc123', seat, onFrame, onAnnounce, onSeatClaimed, onAccepted })
+    useGameSync({
+      code: 'abc123',
+      seat,
+      onFrame,
+      onAnnounce,
+      onSeatClaimed,
+      onAccepted,
+      onTurnAdvanced,
+    })
   );
 
-  return { ...view, onFrame, onAnnounce, onSeatClaimed, onAccepted };
+  return { ...view, onFrame, onAnnounce, onSeatClaimed, onAccepted, onTurnAdvanced };
 }
 
 beforeEach(() => {
@@ -170,6 +183,15 @@ describe('useGameSync', () => {
     expect(onFrame).not.toHaveBeenCalled();
   });
 
+  it('hands over the cursor from a turn advancing', () => {
+    const { onTurnAdvanced } = sync('host');
+    const cursor = { turn_number: 2, active_seat: 'guest', turn_stop: null };
+
+    act(() => presence.bound.events['.turn.advanced']?.({ cursor }));
+
+    expect(onTurnAdvanced).toHaveBeenCalledWith(cursor);
+  });
+
   /**
    * Reverb cannot say who sent a client event and accepts them from connections
    * that never subscribed. Not listening is what makes an injected one inert.
@@ -182,6 +204,7 @@ describe('useGameSync', () => {
       '.board.state',
       '.seat.claimed',
       '.match.accepted',
+      '.turn.advanced',
     ]);
   });
 
@@ -204,5 +227,19 @@ describe('useGameSync', () => {
     );
 
     expect(onAccepted).toHaveBeenCalledWith({ host: false, guest: true });
+  });
+});
+
+describe('postJson', () => {
+  it('parses a JSON body that arrives as a string', async () => {
+    request.mockResolvedValueOnce({ data: '{"cursor":{"turn_number":2}}' });
+
+    await expect(postJson('/x', {})).resolves.toEqual({ cursor: { turn_number: 2 } });
+  });
+
+  it('resolves an empty body to nothing rather than failing the request', async () => {
+    request.mockResolvedValueOnce({ data: '' });
+
+    await expect(postJson('/x', {})).resolves.toBeUndefined();
   });
 });

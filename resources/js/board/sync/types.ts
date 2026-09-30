@@ -37,6 +37,19 @@ export interface PublicState {
 
 export type Seat = 'host' | 'guest';
 
+/** The shared turn cursor, as the server broadcasts it. */
+export interface WireCursor {
+  turn_number: number;
+  active_seat: Seat | null;
+  /** Opaque to the server; the setup's turn track reads it. Null until the turn's first move. */
+  turn_stop: string | null;
+}
+
+/** The cursor as one viewer sees it, with whether it is theirs to move. */
+export interface TurnCursor extends WireCursor {
+  my_turn: boolean;
+}
+
 export interface StateFrame {
   /** Changes when the sender's board remounts, which restarts `seq`. */
   session: string;

@@ -7,8 +7,7 @@ import { CardInstance, GameState, ZoneId } from './types';
 import { resolveTargets, useBoardShortcuts } from './useBoardShortcuts';
 
 /**
- * Ported from PonyRec's `useBoardShortcuts.test.ts`. The `v` (View card) and
- * Shift+Space (step back) cases are gone with their bindings — see the hook.
+ * Ported from PonyRec's `useBoardShortcuts.test.ts`.
  */
 
 function inst(uid: string, subtype = 'character'): CardInstance {
@@ -278,15 +277,33 @@ describe('useBoardShortcuts', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  it('leaves Shift+Space advancing the turn, since nothing steps back yet', () => {
-    // The shared turn cursor arrives with the turn-order slice, and Shift+Space
-    // is the binding that will walk it back. Until then the modifier is ignored
-    // rather than swallowed.
+  it('leaves Shift+Space advancing the turn in solo, where there is no stop to step back to', () => {
     const { onNextTurn } = setup();
 
     press(' ', { code: 'Space', shiftKey: true });
 
     expect(onNextTurn).toHaveBeenCalledOnce();
+  });
+
+  it('steps back on Shift+Space when there is a cursor to step back', () => {
+    const onStepBack = vi.fn();
+    const { onNextTurn } = setup({ onStepBack });
+
+    const event = press(' ', { code: 'Space', shiftKey: true });
+
+    expect(onStepBack).toHaveBeenCalledOnce();
+    expect(onNextTurn).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('ignores a held space bar after the first press', () => {
+    const { onNextTurn } = setup();
+
+    press(' ', { code: 'Space' });
+    const held = press(' ', { code: 'Space', repeat: true });
+
+    expect(onNextTurn).toHaveBeenCalledOnce();
+    expect(held.defaultPrevented).toBe(true);
   });
 
   it('ignores keys carrying a modifier so browser shortcuts still work', () => {
@@ -427,6 +444,7 @@ describe('shortcut tables', () => {
         'x',
         'p',
         'Space',
+        'Shift+Space',
         'd',
         's',
         '?',
