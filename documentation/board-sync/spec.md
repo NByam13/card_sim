@@ -1,6 +1,6 @@
 # Board Sync: Spec
 
-**Status:** Built. Two browsers played a match on the branch; manually verified, ready to merge.
+**Status:** Built and merged (PR #4). Two browsers played a match on the branch; manually verified.
 **Branch:** `feat/board-sync`
 **Last updated:** 2026-09-29
 
@@ -13,7 +13,8 @@ refresh resumes a match instead of re-dealing it.
 This is the third piece of the PvP decoupling, and the one that makes the app a two-player game.
 It sits on [`../local-board/spec.md`](../local-board/spec.md) and
 [`../anonymous-games/spec.md`](../anonymous-games/spec.md); the plan it serves and the audit that
-sizes it are `documentation/pvp-decoupling/{spec,board-audit}.md` in the PonyRec repo.
+sizes it are [`../pvp-decoupling/spec.md`](../pvp-decoupling/spec.md) and
+[`../pvp-decoupling/board-audit.md`](../pvp-decoupling/board-audit.md).
 
 **It is the milestone that lets `pvp` switch off on PonyRec**, once two browsers play a full match
 here.

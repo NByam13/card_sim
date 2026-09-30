@@ -1,8 +1,8 @@
 # Anonymous Games: Spec
 
-**Status:** In progress
+**Status:** Built and merged (PR #2).
 **Branch:** `feat/anonymous-games`
-**Last updated:** 2026-09-22
+**Last updated:** 2026-09-29
 
 ## Summary
 
@@ -10,9 +10,9 @@ The server side of a game before anyone plays a card: creating a game, claiming 
 seats without an account, importing a deck from PonyRec by code, and being present on the game's
 channel. It stops short of turn order, board sync and scoring, which are the next slices.
 
-This is the first piece of the PvP decoupling. The PonyRec-side plan and the decisions this
-inherits are in that repo's `documentation/pvp-decoupling/spec.md`; the deck endpoint's contract is
-`documentation/deck-lookup-api/api.md` there.
+This is the first piece of the PvP decoupling. The plan and the decisions this inherits are in
+[`../pvp-decoupling/spec.md`](../pvp-decoupling/spec.md); the deck endpoint's contract is
+`documentation/deck-lookup-api/api.md` in the PonyRec repo.
 
 ## Goals
 
