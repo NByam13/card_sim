@@ -61,6 +61,7 @@ class GameController extends Controller
         return Inertia::render('games/show', [
             'game' => $this->payload($game, $seat),
             'seat' => $seat?->value,
+            'cursor' => $game->phaseState($seat),
             // The same link for both jobs: it offers the free seat while one is
             // open, and brings spectators in once the game is full.
             'inviteUrl' => route('games.show', $game),
