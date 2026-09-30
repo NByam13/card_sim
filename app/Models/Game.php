@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Seat;
+use Closure;
 use Database\Factories\GameFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -33,6 +34,9 @@ class Game extends Model
 
     /** The setups a game may be played with. One, so far. */
     public const SETUPS = ['mlp'];
+
+    /** Ties rerolled before the host is awarded the roll. */
+    public const MAX_TURN_ORDER_REROLLS = 10;
 
     protected $fillable = [
         'code',
@@ -308,6 +312,30 @@ class Game extends Model
         $winner = $this->turn_order_roll['winner'] ?? null;
 
         return $winner === null ? null : Seat::from($winner);
+    }
+
+    /**
+     * Roll 2d6 per seat, rerolling ties, in the shape `turn_order_roll` stores.
+     *
+     * @param  (Closure(): int)|null  $d6  rolls one die; defaults to `random_int(1, 6)`
+     * @return array{host: array<int, int>, guest: array<int, int>, winner: 'host'|'guest', rerolls: int}
+     */
+    public static function rollForTurnOrder(?Closure $d6 = null): array
+    {
+        $d6 ??= fn (): int => random_int(1, 6);
+
+        for ($rerolls = 0; $rerolls < self::MAX_TURN_ORDER_REROLLS; $rerolls++) {
+            $host = [$d6(), $d6()];
+            $guest = [$d6(), $d6()];
+
+            if (array_sum($host) !== array_sum($guest)) {
+                $winner = array_sum($host) > array_sum($guest) ? Seat::Host : Seat::Guest;
+
+                return ['host' => $host, 'guest' => $guest, 'winner' => $winner->value, 'rerolls' => $rerolls];
+            }
+        }
+
+        return ['host' => [6, 6], 'guest' => [1, 1], 'winner' => Seat::Host->value, 'rerolls' => self::MAX_TURN_ORDER_REROLLS];
     }
 
     // ── Turn cursor ─────────────────────────────────────────────────────────
