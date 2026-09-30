@@ -21,8 +21,7 @@ export function useTurnCursor({
   cursor: served,
 }: {
   code: string;
-  /** Null for a watcher, who only follows the cursor. */
-  seat: Seat | null;
+  seat: Seat;
   /** The cursor on the show payload. A new object means a fresh one from the server. */
   cursor: TurnCursor;
 }): {

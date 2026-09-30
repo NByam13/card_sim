@@ -6,7 +6,7 @@ import SeamBar from '@/board/components/SeamBar';
 import { CompactGameState, expandState } from '@/board/sync/persist';
 import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
 import { useBoardRelay } from '@/board/sync/useBoardRelay';
-import { Acceptance, listenForTurns, lookupCard, useGameSync } from '@/board/sync/useGameSync';
+import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
 import { useMirror } from '@/board/sync/useMirror';
 import { useTurnCursor } from '@/board/sync/useTurnCursor';
 import { useTurnOrder } from '@/board/sync/useTurnOrder';
@@ -132,14 +132,7 @@ export default function Show({
               made: the browser that joins as a watcher and then takes a seat
               would otherwise stay a watcher to everyone here, including itself.
             */}
-            <Table
-              key={seat ?? 'watching'}
-              game={game}
-              seat={seat}
-              cursor={cursor}
-              turnOrder={turnOrder}
-              onCancelled={onCancelled}
-            />
+            <Table key={seat ?? 'watching'} game={game} seat={seat} onCancelled={onCancelled} />
 
             <InviteLink url={inviteUrl} full={!canJoin && game.seats.guest.claimed} />
             {canJoin && <JoinForm code={game.code} />}
@@ -499,19 +492,13 @@ function Cancelled() {
 function Table({
   game,
   seat,
-  cursor,
-  turnOrder,
   onCancelled,
 }: {
   game: Game;
   seat: Seat | null;
-  cursor: TurnCursor;
-  turnOrder: TurnOrder;
   onCancelled: () => void;
 }) {
   const [members, setMembers] = useState<Member[]>([]);
-  const turn = useTurnCursor({ code: game.code, seat, cursor });
-  const order = useTurnOrder({ code: game.code, turnOrder });
 
   // The page's one subscription, on purpose: channels are reference-counted, so
   // a second one here would keep the first alive through the remount above and
@@ -540,27 +527,13 @@ function Table({
       )
       .listen('.game.cancelled', onCancelled)
       .error((error: unknown) => console.error('game channel subscription failed', error));
-
-    listenForTurns(presence, {
-      onTurnAdvanced: turn.receive,
-      onTurnOrderRolled: order.receiveRoll,
-      onTurnOrderDecided: order.receiveDecided,
-    });
-  }, [channel, onCancelled, turn.receive, order.receiveRoll, order.receiveDecided]);
+  }, [channel, onCancelled]);
 
   const present = (role: Role) => members.some((m) => m.role === role);
   const watching = members.filter((m) => m.role === 'spectator').length;
 
   return (
     <div className="space-y-2">
-      {!seat && game.status === 'active' && (
-        <SeamBar
-          seat={null}
-          names={seatNames(game)}
-          cursor={turn.cursor}
-          turnOrder={order.turnOrder}
-        />
-      )}
       <ul className="divide-y divide-gray-200 rounded border border-gray-200">
         {(['host', 'guest'] as Seat[]).map((which) => {
           const state = game.seats[which];
