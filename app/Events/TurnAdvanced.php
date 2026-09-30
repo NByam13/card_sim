@@ -9,8 +9,7 @@ use Illuminate\Contracts\Broadcasting\ShouldRescue;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * The shared turn cursor moved. Carries the whole cursor, so no listener has to
- * re-derive it.
+ * The shared turn cursor moved. Carries the whole cursor.
  */
 class TurnAdvanced implements ShouldBroadcastNow, ShouldRescue
 {

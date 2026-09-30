@@ -23,7 +23,13 @@ class TurnCursorController extends Controller
         abort_if($seat !== $game->actingSeat(), 403, 'It is not your turn.');
 
         $validated = $request->validate([
-            'turn_stop' => [Rule::requiredIf(! $request->boolean('ends_turn')), 'nullable', 'string', 'max:255'],
+            'turn_stop' => [
+                Rule::requiredIf(! $request->boolean('ends_turn')),
+                Rule::prohibitedIf($request->boolean('ends_turn')),
+                'nullable',
+                'string',
+                'max:255',
+            ],
             'ends_turn' => ['sometimes', 'boolean'],
         ]);
 

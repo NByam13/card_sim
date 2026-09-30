@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use LogicException;
 
 /**
  * A two-seat game. The server runs no game logic and knows no rules: it owns the
@@ -385,7 +386,7 @@ class Game extends Model
     private function fillWhere(array $values, Closure $unchanged): bool
     {
         $columns = [...array_keys($values), 'last_activity_at'];
-        $before = Arr::only($this->getAttributes(), $columns);
+        $before = $this->getAttributes();
 
         $this->forceFill([...$values, 'last_activity_at' => now()]);
 
@@ -395,7 +396,7 @@ class Game extends Model
         if ($filled) {
             $this->syncOriginalAttributes($columns);
         } else {
-            $this->setRawAttributes([...$this->getAttributes(), ...$before]);
+            $this->setRawAttributes($before);
         }
 
         return $filled;
@@ -422,10 +423,12 @@ class Game extends Model
      * opens turn 1 for the first player; after it, ending the turn hands the
      * next one to the other seat with no stop yet. Returns false when the turn
      * changed hands since this model was read.
+     *
+     * @throws LogicException before turn order is decided
      */
     public function advanceCursor(?string $turnStop, bool $endsTurn): bool
     {
-        $seat = $this->actingSeat();
+        $seat = $this->actingSeat() ?? throw new LogicException('Turn order is not decided yet.');
 
         $cursor = match (true) {
             ! $this->turnStarted() => ['turn_number' => 1, 'active_seat' => $seat, 'turn_stop' => $turnStop],

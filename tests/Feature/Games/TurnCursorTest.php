@@ -7,6 +7,7 @@ use App\Events\TurnAdvanced;
 use App\Models\Game;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -136,6 +137,27 @@ class TurnCursorTest extends TestCase
             ->assertJsonValidationErrors('turn_stop');
     }
 
+    public function test_a_stop_cannot_be_sent_with_the_end_of_a_turn(): void
+    {
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->onTurn(1, Seat::Host, 'end')->create();
+
+        $this->as(Seat::Host, $game)
+            ->postJson("/games/{$game->code}/cursor", ['ends_turn' => true, 'turn_stop' => 'main'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('turn_stop');
+
+        $this->assertSame(1, $game->refresh()->turn_number);
+    }
+
+    public function test_the_model_refuses_to_move_the_cursor_before_turn_order_is_decided(): void
+    {
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderRolled()->create();
+
+        $this->expectException(LogicException::class);
+
+        $game->advanceCursor('main', false);
+    }
+
     public function test_a_move_is_refused_once_the_turn_has_changed_hands(): void
     {
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->onTurn(1, Seat::Host, 'end')->create();
@@ -148,5 +170,18 @@ class TurnCursorTest extends TestCase
         $this->assertSame(2, $game->turn_number);
         $this->assertSame(Seat::Guest, $game->active_seat);
         $this->assertSame(1, $stale->turn_number);
+    }
+
+    public function test_a_lost_race_leaves_the_model_as_it_was(): void
+    {
+        $stale = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->create();
+        $this->assertTrue($stale->fresh()->advanceCursor('main', false));
+
+        $this->assertFalse($stale->advanceCursor('main', false));
+
+        $this->assertSame(0, $stale->turn_number);
+        $this->assertNull($stale->active_seat);
+        $this->assertNull($stale->turn_stop);
+        $this->assertFalse($stale->isDirty());
     }
 }
