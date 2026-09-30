@@ -133,6 +133,16 @@ describe('useTurnCursor', () => {
     expect(result.current.cursor).toEqual(served({ turn_number: 4 }));
   });
 
+  it('ignores a cursor from a turn already over', () => {
+    const { result } = mount(served({ turn_number: 4, active_seat: 'guest', my_turn: false }));
+
+    act(() => result.current.receive({ turn_number: 3, active_seat: 'host', turn_stop: 'end' }));
+
+    expect(result.current.cursor).toEqual(
+      served({ turn_number: 4, active_seat: 'guest', my_turn: false })
+    );
+  });
+
   it('takes a fresh cursor from the show payload', () => {
     const { result, rerender } = mount();
 

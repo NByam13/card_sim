@@ -118,7 +118,10 @@ export async function postJson<T = unknown>(url: string, data: unknown): Promise
     headers: { Accept: 'application/json' },
   });
 
-  return (typeof response.data === 'string' ? JSON.parse(response.data) : response.data) as T;
+  if (typeof response.data !== 'string') return response.data as T;
+
+  // An empty body (a 204, say) is a success with nothing in it, not a parse error.
+  return (response.data.trim() === '' ? undefined : JSON.parse(response.data)) as T;
 }
 
 /** Resolve a card through this app's cached proxy. Null when it cannot be. */

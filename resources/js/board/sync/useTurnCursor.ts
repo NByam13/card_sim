@@ -45,8 +45,12 @@ export function useTurnCursor({
 
   useEffect(() => apply(served), [apply, served]);
 
+  // The mover hears its own `.turn.advanced` too, and that echo can land after the response.
   const receive = useCallback(
-    (wire: WireCursor) => apply({ ...wire, my_turn: wire.active_seat === seat }),
+    (wire: WireCursor) => {
+      if (wire.turn_number < latest.current.turn_number) return;
+      apply({ ...wire, my_turn: wire.active_seat === seat });
+    },
     [apply, seat]
   );
 

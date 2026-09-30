@@ -189,7 +189,10 @@ export default function BoardArena({
     dispatch({ type: 'NEXT_TURN' });
   };
 
-  const advanceTurn = turnCursor ? () => turnCursor.advance(nextTurn) : nextTurn;
+  // The turn start runs after a round trip, so it must read the board as it is then.
+  const nextTurnRef = useRef(nextTurn);
+  nextTurnRef.current = nextTurn;
+  const advanceTurn = turnCursor ? () => turnCursor.advance(() => nextTurnRef.current()) : nextTurn;
 
   const revealScene = () => {
     if (state.zones.sceneDeck.length === 0) {

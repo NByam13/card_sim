@@ -1,5 +1,5 @@
 import { Card, Deck } from '@/types/cards';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { emptyZones } from '../setup';
 import { CardInstance, GameState } from '../types';
@@ -182,5 +182,57 @@ describe('BoardArena, the table itself', () => {
     fireEvent.keyDown(window, { key: ' ', code: 'Space' });
 
     expect(latest().turn).toBe(before + 1);
+  });
+});
+
+describe('BoardArena, in a match', () => {
+  /** A board on the shared cursor whose turn start the test runs by hand, as if the server answered. */
+  function matchArena() {
+    const onState = vi.fn();
+    const turnCursor = { advance: vi.fn(), stepBack: vi.fn() };
+    render(
+      <BoardArena
+        deck={deck}
+        scale={1}
+        savedState={boardWithRetiredCard()}
+        onState={onState}
+        turnCursor={turnCursor}
+      />
+    );
+
+    const latest = (): GameState => onState.mock.lastCall?.[0] as GameState;
+    const startTurn = () => act(() => turnCursor.advance.mock.lastCall?.[0]());
+
+    return { latest, turnCursor, startTurn };
+  }
+
+  it('moves the cursor on space rather than taking a local turn', () => {
+    const { latest, turnCursor } = matchArena();
+    const before = latest().turn;
+
+    fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+
+    expect(turnCursor.advance).toHaveBeenCalledOnce();
+    expect(latest().turn).toBe(before);
+  });
+
+  it('steps the cursor back on Shift+Space', () => {
+    const { turnCursor } = matchArena();
+
+    fireEvent.keyDown(window, { key: ' ', code: 'Space', shiftKey: true });
+
+    expect(turnCursor.stepBack).toHaveBeenCalledOnce();
+  });
+
+  it('starts the turn against the board as it is when the server answers', () => {
+    const { latest, startTurn } = matchArena();
+
+    fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+    // The last card is drawn while the move is still in flight.
+    fireEvent.keyDown(window, { key: 'd' });
+    startTurn();
+
+    expect(latest().zones.library).toHaveLength(0);
+    expect(screen.getByText(/Main Deck empty/)).toBeInTheDocument();
   });
 });
