@@ -1,8 +1,8 @@
 # Local Board: Spec
 
-**Status:** Built. Both PRs landed on the branch; in manual review.
+**Status:** Built and merged (PR #3).
 **Branch:** `feat/local-board`
-**Last updated:** 2026-09-24
+**Last updated:** 2026-09-29
 
 ## Summary
 
@@ -13,7 +13,8 @@ opponent's half is not rendered, nothing is broadcast, and nothing is saved.
 
 This is the second piece of the PvP decoupling and the largest. The lobby it sits on is
 [`../anonymous-games/spec.md`](../anonymous-games/spec.md); the plan it serves and the audit that
-sizes it are `documentation/pvp-decoupling/{spec,board-audit}.md` in the PonyRec repo.
+sizes it are [`../pvp-decoupling/spec.md`](../pvp-decoupling/spec.md) and
+[`../pvp-decoupling/board-audit.md`](../pvp-decoupling/board-audit.md).
 
 ## Goals
 
