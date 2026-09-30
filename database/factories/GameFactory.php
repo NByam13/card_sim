@@ -68,6 +68,18 @@ class GameFactory extends Factory
         return $this->state(fn () => ['status' => 'finished']);
     }
 
+    /** The dice rolled, with the winner yet to elect who goes first. */
+    public function turnOrderRolled(Seat $rollWinner = Seat::Host): static
+    {
+        $roll = ['winner' => $rollWinner->value, 'rerolls' => 0];
+
+        foreach (Seat::cases() as $seat) {
+            $roll[$seat->value] = $seat === $rollWinner ? [6, 5] : [2, 1];
+        }
+
+        return $this->state(fn () => ['turn_order_roll' => $roll]);
+    }
+
     /**
      * The roll decided, and its winner elected who goes first. No turn started.
      *
@@ -75,18 +87,8 @@ class GameFactory extends Factory
      */
     public function turnOrderDecided(Seat $firstPlayer = Seat::Host, ?Seat $rollWinner = null): static
     {
-        $rollWinner ??= $firstPlayer;
-
-        $roll = ['winner' => $rollWinner->value, 'rerolls' => 0];
-
-        foreach (Seat::cases() as $seat) {
-            $roll[$seat->value] = $seat === $rollWinner ? [6, 5] : [2, 1];
-        }
-
-        return $this->state(fn () => [
-            'first_player' => $firstPlayer,
-            'turn_order_roll' => $roll,
-        ]);
+        return $this->turnOrderRolled($rollWinner ?? $firstPlayer)
+            ->state(fn () => ['first_player' => $firstPlayer]);
     }
 
     /** A turn under way, with the cursor at a stop. */
