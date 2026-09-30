@@ -102,6 +102,8 @@ export interface BoardShortcutOptions {
   selection?: ReadonlySet<string>;
   onDraw: () => void;
   onNextTurn: () => void;
+  /** Shift+Space. Absent in solo, where Shift+Space is plain space. */
+  onStepBack?: () => void;
   onRevealScene: () => void;
   onTopCardToPlan: () => void;
   onPromoteStage: () => void;
@@ -122,9 +124,7 @@ export interface BoardShortcutOptions {
 /**
  * Bind the board's keyboard shortcuts to the window.
  *
- * Ported from PonyRec's `useBoardShortcuts.ts`. One binding did not come over:
- * Shift+Space (step back), which walks a shared turn track that arrives with the
- * turn-order slice.
+ * Ported from PonyRec's `useBoardShortcuts.ts`.
  *
  * Card-scoped keys act on the card under the cursor, falling back to the one
  * whose context menu is open — so both "hover and press t" and "right-click,
@@ -142,6 +142,7 @@ export function useBoardShortcuts({
   selection = EMPTY_SELECTION,
   onDraw,
   onNextTurn,
+  onStepBack,
   onRevealScene,
   onTopCardToPlan,
   onPromoteStage,
@@ -163,7 +164,10 @@ export function useBoardShortcuts({
       if (event.code === 'Space') {
         if (cardOnly) return;
         event.preventDefault();
-        onNextTurn();
+        // A held space bar would otherwise walk straight through the turn.
+        if (event.repeat) return;
+        if (event.shiftKey && onStepBack) onStepBack();
+        else onNextTurn();
         return;
       }
 
@@ -305,6 +309,7 @@ export function useBoardShortcuts({
     dispatch,
     onDraw,
     onNextTurn,
+    onStepBack,
     onRevealScene,
     onTopCardToPlan,
     onPromoteStage,

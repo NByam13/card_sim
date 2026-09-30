@@ -59,6 +59,7 @@ export default function BoardArena({
   onState,
   canRestart = true,
   header,
+  turnCursor,
 }: {
   deck: Deck;
   /** Card zoom factor (the board itself stays at 1×; only cards scale). */
@@ -79,6 +80,15 @@ export default function BoardArena({
    * the board instead.
    */
   header?: ReactNode;
+  /**
+   * The shared turn cursor in a live match. Absent in solo, where the next turn
+   * is local alone.
+   */
+  turnCursor?: {
+    /** Runs `onTurnStart` once the press that starts the turn is accepted. */
+    advance: (onTurnStart: () => void) => void;
+    stepBack: () => void;
+  };
 }) {
   const { state, dispatch } = useGame(deck, savedState);
   const { message, show, toast } = useToast();
@@ -179,6 +189,8 @@ export default function BoardArena({
     dispatch({ type: 'NEXT_TURN' });
   };
 
+  const advanceTurn = turnCursor ? () => turnCursor.advance(nextTurn) : nextTurn;
+
   const revealScene = () => {
     if (state.zones.sceneDeck.length === 0) {
       toast('Scene Deck is empty');
@@ -243,7 +255,8 @@ export default function BoardArena({
     selected,
     selection,
     onDraw: draw,
-    onNextTurn: nextTurn,
+    onNextTurn: advanceTurn,
+    onStepBack: turnCursor?.stepBack,
     onRevealScene: revealScene,
     onTopCardToPlan: topCardToPlan,
     onPromoteStage: promoteStage,
@@ -270,7 +283,7 @@ export default function BoardArena({
         onRestart={canRestart ? () => dispatch({ type: 'RESTART' }) : null}
         onShuffleLibrary={() => dispatch({ type: 'SHUFFLE_LIBRARY' })}
         onDraw={draw}
-        onNextTurn={nextTurn}
+        onNextTurn={advanceTurn}
       />
       <Randomizers onResult={toast} />
       <ShortcutsButton onClick={toggleShortcuts} />

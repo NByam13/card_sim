@@ -2,7 +2,7 @@ import { http } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/types/cards';
-import { Seat, StateFrame } from './types';
+import { Seat, StateFrame, WireCursor } from './types';
 
 interface Member {
   id: string;
@@ -39,6 +39,7 @@ export function useGameSync({
   onAnnounce,
   onSeatClaimed,
   onAccepted,
+  onTurnAdvanced,
 }: {
   code: string;
   seat: Seat;
@@ -50,13 +51,15 @@ export function useGameSync({
   onSeatClaimed: () => void;
   /** A seat accepted the match. Carries both answers, not just the sender's. */
   onAccepted: (accepted: Acceptance) => void;
+  /** The shared turn cursor moved, by either seat. */
+  onTurnAdvanced: (cursor: WireCursor) => void;
 }): { opponentPresent: boolean; watching: number } {
   const [opponentPresent, setOpponentPresent] = useState(false);
   const [watching, setWatching] = useState(0);
 
   // Handlers ride a ref so a new closure does not tear the subscription down.
-  const handlers = useRef({ onFrame, onAnnounce, onSeatClaimed, onAccepted });
-  handlers.current = { onFrame, onAnnounce, onSeatClaimed, onAccepted };
+  const handlers = useRef({ onFrame, onAnnounce, onSeatClaimed, onAccepted, onTurnAdvanced });
+  handlers.current = { onFrame, onAnnounce, onSeatClaimed, onAccepted, onTurnAdvanced };
 
   const { channel } = useEchoPresence(`game.${code}`, [], () => {});
 
@@ -93,6 +96,9 @@ export function useGameSync({
       .listen('.match.accepted', ({ accepted }: { accepted: Acceptance }) =>
         handlers.current.onAccepted(accepted)
       )
+      .listen('.turn.advanced', ({ cursor }: { cursor: WireCursor }) =>
+        handlers.current.onTurnAdvanced(cursor)
+      )
       .error((error: unknown) => console.error('game channel subscription failed', error));
   }, [channel, seat]);
 
@@ -104,13 +110,15 @@ export function useGameSync({
  * as the header Laravel expects. A bare `fetch` would need that wired by hand,
  * and Inertia's docs ask for no `csrf-token` meta tag to read it from.
  */
-export async function postJson(url: string, data: unknown): Promise<void> {
-  await http.getClient().request({
+export async function postJson<T = unknown>(url: string, data: unknown): Promise<T> {
+  const response = await http.getClient().request({
     method: 'post',
     url,
     data,
     headers: { Accept: 'application/json' },
   });
+
+  return (typeof response.data === 'string' ? JSON.parse(response.data) : response.data) as T;
 }
 
 /** Resolve a card through this app's cached proxy. Null when it cannot be. */

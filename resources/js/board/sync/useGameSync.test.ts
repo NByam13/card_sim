@@ -69,11 +69,20 @@ function sync(seat: Seat = 'host') {
   const onAnnounce = vi.fn();
   const onSeatClaimed = vi.fn();
   const onAccepted = vi.fn();
+  const onTurnAdvanced = vi.fn();
   const view = renderHook(() =>
-    useGameSync({ code: 'abc123', seat, onFrame, onAnnounce, onSeatClaimed, onAccepted })
+    useGameSync({
+      code: 'abc123',
+      seat,
+      onFrame,
+      onAnnounce,
+      onSeatClaimed,
+      onAccepted,
+      onTurnAdvanced,
+    })
   );
 
-  return { ...view, onFrame, onAnnounce, onSeatClaimed, onAccepted };
+  return { ...view, onFrame, onAnnounce, onSeatClaimed, onAccepted, onTurnAdvanced };
 }
 
 beforeEach(() => {
@@ -174,6 +183,15 @@ describe('useGameSync', () => {
    * Reverb cannot say who sent a client event and accepts them from connections
    * that never subscribed. Not listening is what makes an injected one inert.
    */
+  it('hands over the cursor from a turn advancing', () => {
+    const { onTurnAdvanced } = sync('host');
+    const cursor = { turn_number: 2, active_seat: 'guest', turn_stop: null };
+
+    act(() => presence.bound.events['.turn.advanced']?.({ cursor }));
+
+    expect(onTurnAdvanced).toHaveBeenCalledWith(cursor);
+  });
+
   it('never listens for client events', () => {
     sync('host');
 
@@ -182,6 +200,7 @@ describe('useGameSync', () => {
       '.board.state',
       '.seat.claimed',
       '.match.accepted',
+      '.turn.advanced',
     ]);
   });
 

@@ -3,10 +3,11 @@ import BoardArena from '@/board/components/BoardArena';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
 import { CompactGameState, expandState } from '@/board/sync/persist';
-import { PublicState } from '@/board/sync/types';
+import { PublicState, TurnCursor } from '@/board/sync/types';
 import { useBoardRelay } from '@/board/sync/useBoardRelay';
 import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
 import { useMirror } from '@/board/sync/useMirror';
+import { useTurnCursor } from '@/board/sync/useTurnCursor';
 import ZoomControls from '@/board/components/ZoomControls';
 import { GameState } from '@/board/types';
 import { usePersistentZoom } from '@/board/zoom';
@@ -40,14 +41,6 @@ interface Game {
   opponent_state: PublicState | null;
 }
 
-/** The shared turn cursor, with whether it is this viewer's to move. */
-interface Cursor {
-  turn_number: number;
-  active_seat: Seat | null;
-  turn_stop: string | null;
-  my_turn: boolean;
-}
-
 interface Member {
   id: string;
   role: Role;
@@ -57,7 +50,7 @@ interface Member {
 interface Props {
   game: Game;
   seat: Seat | null;
-  cursor: Cursor;
+  cursor: TurnCursor;
   inviteUrl: string;
   canJoin: boolean;
   canCancel: boolean;
@@ -75,7 +68,7 @@ interface Props {
  * A watcher stays on the lobby regardless — they get a board of their own to
  * mirror in the slice after this one.
  */
-export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Props) {
+export default function Show({ game, seat, cursor, inviteUrl, canJoin, canCancel }: Props) {
   const [cancelled, setCancelled] = useState(false);
   const [solo, setSolo] = useState(false);
 
@@ -93,6 +86,7 @@ export default function Show({ game, seat, inviteUrl, canJoin, canCancel }: Prop
       <Playing
         game={game}
         seat={seat}
+        cursor={cursor}
         deck={game.deck}
         onWaitingRoom={seated ? null : () => setSolo(false)}
       />
@@ -181,11 +175,13 @@ function PlaySolo({ onStart }: { onStart: () => void }) {
 function Playing({
   game,
   seat,
+  cursor,
   deck,
   onWaitingRoom,
 }: {
   game: Game;
   seat: Seat;
+  cursor: TurnCursor;
   deck: Deck;
   /** Back to the lobby, or null once the second seat is taken and there is no lobby left to want. */
   onWaitingRoom: (() => void) | null;
@@ -215,11 +211,13 @@ function Playing({
     saving: game.status === 'active',
   });
   const { mirror, receive } = useMirror(lookupCard, game.opponent_state);
+  const turn = useTurnCursor({ code: game.code, seat, cursor });
   const { opponentPresent } = useGameSync({
     code: game.code,
     seat,
     onFrame: receive,
     onAnnounce: announce,
+    onTurnAdvanced: turn.receive,
     // Presence cannot tell a watcher from the player who just sat down, and the
     // props this page is holding predate the claim either way.
     onSeatClaimed: useCallback(() => router.reload({ only: ['game'] }), []),
@@ -289,6 +287,7 @@ function Playing({
           // re-deal theirs is a way around the mulligan rules, so it is a solo
           // affordance only.
           canRestart={!matchLive}
+          turnCursor={matchLive ? turn : undefined}
           header={
             seated ? (
               <div className="mb-3">
