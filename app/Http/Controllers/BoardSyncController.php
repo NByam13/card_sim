@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\Seat;
 use App\Events\BoardStateUpdated;
+use App\Http\Requests\RelayBoardRequest;
+use App\Http\Requests\SaveBoardRequest;
 use App\Models\Game;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 /**
  * A seat's board leaving the browser, two ways.
@@ -23,24 +23,13 @@ use Illuminate\Http\Request;
 class BoardSyncController extends Controller
 {
     /** Relay this seat's redacted board to everyone else at the table. */
-    public function relay(Game $game, Request $request): JsonResponse
+    public function relay(Game $game, RelayBoardRequest $request): JsonResponse
     {
-        $seat = $this->activeSeatOrAbort($game, $request);
-
-        // A board played alone is nobody else's business. The browser already
-        // holds its frames back until the match is live; this is the same rule
-        // where it can actually be enforced.
-        abort_if(! $game->matchIsLive(), 403, 'The match has not started yet.');
-
-        $validated = $request->validate([
-            'session' => ['required', 'string', 'max:64'],
-            'seq' => ['required', 'integer', 'min:0'],
-            'state' => ['required', 'array'],
-        ]);
+        $validated = $request->validated();
 
         broadcast(new BoardStateUpdated(
             $game,
-            $seat,
+            $request->seat(),
             $validated['state'],
             $validated['session'],
             $validated['seq'],
@@ -50,15 +39,10 @@ class BoardSyncController extends Controller
     }
 
     /** Save this seat's board, whole and redacted, so a refresh resumes it. */
-    public function save(Game $game, Request $request): JsonResponse
+    public function save(Game $game, SaveBoardRequest $request): JsonResponse
     {
-        $seat = $this->activeSeatOrAbort($game, $request);
-
-        $validated = $request->validate([
-            'seq' => ['required', 'integer', 'min:0'],
-            'state' => ['required', 'array'],
-            'public_state' => ['required', 'array'],
-        ]);
+        $seat = $request->seat();
+        $validated = $request->validated();
 
         $game->forceFill([
             $seat->column('state') => $validated['state'],
