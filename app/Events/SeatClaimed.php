@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Enums\Seat;
 use App\Http\Controllers\GameController;
 use App\Models\Game;
 use Illuminate\Broadcasting\PresenceChannel;
@@ -28,7 +29,7 @@ class SeatClaimed implements ShouldBroadcastNow, ShouldRescue
 
     public function __construct(
         public readonly Game $game,
-        public readonly string $seat,
+        public readonly Seat $seat,
     ) {}
 
     /** @return array<int, PresenceChannel> */
@@ -45,6 +46,6 @@ class SeatClaimed implements ShouldBroadcastNow, ShouldRescue
     /** @return array<string, string> */
     public function broadcastWith(): array
     {
-        return ['seat' => $this->seat];
+        return ['seat' => $this->seat->value];
     }
 }

@@ -27,7 +27,7 @@ yarn-error.log
 /.vscode
 /.zed
 /.agents
-/.ai
+/.ai/mcp
 /.amp
 /.claude
 /.cursor

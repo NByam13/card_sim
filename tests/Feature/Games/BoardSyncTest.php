@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Games;
 
+use App\Enums\Seat;
 use App\Events\BoardStateUpdated;
 use App\Models\Game;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,7 +56,7 @@ class BoardSyncTest extends TestCase
             ->assertOk()
             ->assertJson(['relayed' => true]);
 
-        Event::assertDispatched(BoardStateUpdated::class, fn (BoardStateUpdated $event) => $event->seat === 'host'
+        Event::assertDispatched(BoardStateUpdated::class, fn (BoardStateUpdated $event) => $event->seat === Seat::Host
             && $event->seq === 3
             && $event->session === 'session-1');
     }
@@ -73,7 +74,7 @@ class BoardSyncTest extends TestCase
             ->postJson("/games/{$game->code}/sync", [...$this->frame(), 'seat' => 'guest'])
             ->assertOk();
 
-        Event::assertDispatched(BoardStateUpdated::class, fn (BoardStateUpdated $event) => $event->seat === 'host');
+        Event::assertDispatched(BoardStateUpdated::class, fn (BoardStateUpdated $event) => $event->seat === Seat::Host);
     }
 
     public function test_a_watcher_cannot_relay_a_board(): void
@@ -105,7 +106,7 @@ class BoardSyncTest extends TestCase
 
         $this->asHost($game)->postJson("/games/{$game->code}/sync", $this->frame())->assertOk();
 
-        $this->assertNull($game->fresh()->stateFor('host'));
+        $this->assertNull($game->fresh()->stateFor(Seat::Host));
         $this->assertSame(0, $game->fresh()->host_seq);
     }
 
@@ -123,8 +124,8 @@ class BoardSyncTest extends TestCase
 
         $game->refresh();
 
-        $this->assertSame('TEST-C01', $game->stateFor('host')['zones']['hand'][0]['cardNumber']);
-        $this->assertSame(['hand' => 1], $game->publicStateFor('host')['counts']);
+        $this->assertSame('TEST-C01', $game->stateFor(Seat::Host)['zones']['hand'][0]['cardNumber']);
+        $this->assertSame(['hand' => 1], $game->publicStateFor(Seat::Host)['counts']);
         $this->assertSame(7, $game->host_seq);
     }
 
@@ -140,7 +141,7 @@ class BoardSyncTest extends TestCase
             ])
             ->assertOk();
 
-        $this->assertNull($game->fresh()->stateFor('guest'));
+        $this->assertNull($game->fresh()->stateFor(Seat::Guest));
     }
 
     public function test_a_watcher_cannot_save_a_board(): void
@@ -153,7 +154,7 @@ class BoardSyncTest extends TestCase
             'public_state' => ['counts' => []],
         ])->assertForbidden();
 
-        $this->assertNull($game->fresh()->stateFor('host'));
+        $this->assertNull($game->fresh()->stateFor(Seat::Host));
     }
 
     public function test_saving_marks_the_game_active(): void

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Games;
 
+use App\Enums\Seat;
 use App\Events\MatchAccepted;
 use App\Models\Game;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -51,7 +52,7 @@ class MatchAcceptanceTest extends TestCase
         $this->asHost($game)->post("/games/{$game->code}/accept")->assertRedirect();
 
         $this->assertTrue($game->refresh()->matchIsLive());
-        Event::assertDispatched(MatchAccepted::class, fn (MatchAccepted $event) => $event->seat === 'host');
+        Event::assertDispatched(MatchAccepted::class, fn (MatchAccepted $event) => $event->seat === Seat::Host);
     }
 
     /**
@@ -104,10 +105,10 @@ class MatchAcceptanceTest extends TestCase
 
         $game->refresh();
 
-        foreach (Game::SEATS as $seat) {
-            $this->assertNull($game->stateFor($seat), "{$seat} kept a board");
-            $this->assertNull($game->publicStateFor($seat), "{$seat} kept a public board");
-            $this->assertSame(0, $game->{"{$seat}_seq"});
+        foreach (Seat::cases() as $seat) {
+            $this->assertNull($game->stateFor($seat), "{$seat->value} kept a board");
+            $this->assertNull($game->publicStateFor($seat), "{$seat->value} kept a public board");
+            $this->assertSame(0, $game->{$seat->column('seq')});
         }
     }
 
@@ -127,7 +128,7 @@ class MatchAcceptanceTest extends TestCase
         $game->refresh();
 
         $this->assertFalse($game->matchIsLive());
-        $this->assertNotNull($game->stateFor('guest'));
+        $this->assertNotNull($game->stateFor(Seat::Guest));
     }
 
     public function test_the_page_tells_a_seat_who_has_accepted(): void

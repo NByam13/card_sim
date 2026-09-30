@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Seat;
 use Database\Factories\GameFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,12 @@ use Illuminate\Support\Str;
  * every other question about "who is this" goes through it.
  *
  * @see documentation/anonymous-games/spec.md
+ *
+ * @property Seat|null $first_player
+ * @property array{host: array<int, int>, guest: array<int, int>, winner: 'host'|'guest', rerolls: int}|null $turn_order_roll
+ * @property int $turn_number
+ * @property Seat|null $active_seat
+ * @property string|null $turn_stop
  */
 class Game extends Model
 {
@@ -23,8 +30,6 @@ class Game extends Model
     use HasFactory;
 
     public const STATUSES = ['waiting', 'active', 'finished'];
-
-    public const SEATS = ['host', 'guest'];
 
     /** The setups a game may be played with. One, so far. */
     public const SETUPS = ['mlp'];
@@ -49,6 +54,11 @@ class Game extends Model
         'guest_seq',
         'host_accepted_at',
         'guest_accepted_at',
+        'first_player',
+        'turn_order_roll',
+        'turn_number',
+        'active_seat',
+        'turn_stop',
         'last_activity_at',
     ];
 
@@ -61,6 +71,7 @@ class Game extends Model
     protected $attributes = [
         'setup' => 'mlp',
         'status' => 'waiting',
+        'turn_number' => 0,
     ];
 
     /** The token hashes never leave the server. */
@@ -80,6 +91,10 @@ class Game extends Model
             'guest_seq' => 'integer',
             'host_accepted_at' => 'datetime',
             'guest_accepted_at' => 'datetime',
+            'first_player' => Seat::class,
+            'turn_order_roll' => 'array',
+            'turn_number' => 'integer',
+            'active_seat' => Seat::class,
             'last_activity_at' => 'datetime',
         ];
     }
@@ -123,10 +138,8 @@ class Game extends Model
      *
      * Compared in constant time, and against both seats rather than a claimed
      * one: the caller says what it has, never which seat it is.
-     *
-     * @return 'host'|'guest'|null
      */
-    public function seatFor(?string $token): ?string
+    public function seatFor(?string $token): ?Seat
     {
         if ($token === null || $token === '') {
             return null;
@@ -134,8 +147,8 @@ class Game extends Model
 
         $hash = self::hashToken($token);
 
-        foreach (self::SEATS as $seat) {
-            $stored = $this->{"{$seat}_token_hash"};
+        foreach (Seat::cases() as $seat) {
+            $stored = $this->{$seat->column('token_hash')};
 
             if (is_string($stored) && hash_equals($stored, $hash)) {
                 return $seat;
@@ -145,28 +158,17 @@ class Game extends Model
         return null;
     }
 
-    /**
-     * The other seat. Takes a seat rather than a token — callers have one.
-     *
-     * @param  'host'|'guest'  $seat
-     * @return 'host'|'guest'
-     */
-    public function opposingSeat(string $seat): string
-    {
-        return $seat === 'host' ? 'guest' : 'host';
-    }
-
     public function guestSeatOpen(): bool
     {
         return $this->status === 'waiting' && $this->guest_token_hash === null;
     }
 
     /** The display name for a seat, falling back to its label. */
-    public function nameFor(string $seat): string
+    public function nameFor(Seat $seat): string
     {
-        $name = $this->{"{$seat}_name"};
+        $name = $this->{$seat->column('name')};
 
-        return is_string($name) && $name !== '' ? $name : ucfirst($seat);
+        return is_string($name) && $name !== '' ? $name : $seat->name;
     }
 
     /**
@@ -174,13 +176,13 @@ class Game extends Model
      *
      * @return array<string, mixed>|null
      */
-    public function deckFor(string $seat): ?array
+    public function deckFor(Seat $seat): ?array
     {
-        return $this->{"{$seat}_deck"};
+        return $this->{$seat->column('deck')};
     }
 
     /** The deck's name at import time, for the lobby. */
-    public function deckNameFor(string $seat): ?string
+    public function deckNameFor(Seat $seat): ?string
     {
         $deck = $this->deckFor($seat);
 
@@ -192,9 +194,9 @@ class Game extends Model
      *
      * @return array<string, mixed>|null
      */
-    public function stateFor(string $seat): ?array
+    public function stateFor(Seat $seat): ?array
     {
-        return $this->{"{$seat}_state"};
+        return $this->{$seat->column('state')};
     }
 
     /**
@@ -202,9 +204,9 @@ class Game extends Model
      *
      * @return array<string, mixed>|null
      */
-    public function publicStateFor(string $seat): ?array
+    public function publicStateFor(Seat $seat): ?array
     {
-        return $this->{"{$seat}_public_state"};
+        return $this->{$seat->column('public_state')};
     }
 
     // ── The match ───────────────────────────────────────────────────────────
@@ -212,14 +214,17 @@ class Game extends Model
     /**
      * Which seats have accepted the match.
      *
-     * @return array<string, bool>
+     * @return array<string, bool> Keyed by seat value.
      */
     public function acceptance(): array
     {
-        return [
-            'host' => $this->host_accepted_at !== null,
-            'guest' => $this->guest_accepted_at !== null,
-        ];
+        $acceptance = [];
+
+        foreach (Seat::cases() as $seat) {
+            $acceptance[$seat->value] = $this->{$seat->column('accepted_at')} !== null;
+        }
+
+        return $acceptance;
     }
 
     /**
@@ -239,17 +244,15 @@ class Game extends Model
      * Drops the boards the acceptance discards. Both halves are re-dealt in the
      * browser when a match starts, and a saved board left behind would be
      * restored over the fresh one by anyone who refreshed before it first saved.
-     *
-     * @param  'host'|'guest'  $seat
      */
-    public function acceptFor(string $seat): void
+    public function acceptFor(Seat $seat): void
     {
-        if ($this->{"{$seat}_accepted_at"} !== null) {
+        if ($this->{$seat->column('accepted_at')} !== null) {
             return;
         }
 
         $this->forceFill([
-            "{$seat}_accepted_at" => now(),
+            $seat->column('accepted_at') => now(),
             'last_activity_at' => now(),
             ...$this->clearedBoard($seat),
         ])->save();
@@ -257,23 +260,70 @@ class Game extends Model
         // The other seat has been playing alone while it waited, and that board
         // goes too — it is the hand they goldfished, not one they were dealt.
         if ($this->matchIsLive()) {
-            $this->forceFill($this->clearedBoard($this->opposingSeat($seat)))->save();
+            $this->forceFill($this->clearedBoard($seat->opposing()))->save();
         }
     }
 
     /**
      * The columns that make a seat's saved board absent.
      *
-     * @param  'host'|'guest'  $seat
      * @return array<string, null|int>
      */
-    private function clearedBoard(string $seat): array
+    private function clearedBoard(Seat $seat): array
     {
         return [
-            "{$seat}_state" => null,
-            "{$seat}_public_state" => null,
-            "{$seat}_seq" => 0,
+            $seat->column('state') => null,
+            $seat->column('public_state') => null,
+            $seat->column('seq') => 0,
         ];
+    }
+
+    // ── Turn order ──────────────────────────────────────────────────────────
+
+    /** Turn order is settled once a first player is recorded. */
+    public function turnOrderDecided(): bool
+    {
+        return $this->first_player !== null;
+    }
+
+    /**
+     * Whether this seat is on the play. Null before turn order is decided, or
+     * for a watcher, who holds no seat.
+     */
+    public function goesFirst(?Seat $seat): ?bool
+    {
+        if ($seat === null || $this->first_player === null) {
+            return null;
+        }
+
+        return $seat === $this->first_player;
+    }
+
+    /**
+     * The seat that won the dice roll, or null before a roll. The winner only
+     * chooses who goes first, so this can differ from `first_player`.
+     */
+    public function rollWinner(): ?Seat
+    {
+        $winner = $this->turn_order_roll['winner'] ?? null;
+
+        return $winner === null ? null : Seat::from($winner);
+    }
+
+    // ── Turn cursor ─────────────────────────────────────────────────────────
+
+    public function turnStarted(): bool
+    {
+        return $this->turn_number > 0;
+    }
+
+    /**
+     * The seat entitled to move the cursor. `active_seat` is null until the
+     * first turn starts, so the player on the play opens the game.
+     */
+    public function actingSeat(): ?Seat
+    {
+        return $this->active_seat ?? $this->first_player;
     }
 
     public function touchActivity(): void

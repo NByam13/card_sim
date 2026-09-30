@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Games;
 
+use App\Enums\Seat;
 use App\Events\SeatClaimed;
 use App\Models\Game;
 use Database\Factories\GameFactory;
@@ -45,7 +46,7 @@ class JoinGameTest extends TestCase
         $game->refresh();
         $this->assertSame('active', $game->status);
         $this->assertSame('Sam', $game->guest_name);
-        $this->assertSame('Guest deck', $game->deckNameFor('guest'));
+        $this->assertSame('Guest deck', $game->deckNameFor(Seat::Guest));
     }
 
     public function test_the_joiner_holds_the_guest_seat_afterwards(): void
@@ -137,7 +138,7 @@ class JoinGameTest extends TestCase
 
         Event::assertDispatched(
             SeatClaimed::class,
-            fn (SeatClaimed $event) => $event->game->is($game) && $event->seat === 'guest'
+            fn (SeatClaimed $event) => $event->game->is($game) && $event->seat === Seat::Guest
         );
     }
 
@@ -156,7 +157,7 @@ class JoinGameTest extends TestCase
     {
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->create();
 
-        $event = new SeatClaimed($game, 'guest');
+        $event = new SeatClaimed($game, Seat::Guest);
 
         $this->assertSame(['seat' => 'guest'], $event->broadcastWith());
         $this->assertSame('presence-game.'.$game->code, $event->broadcastOn()[0]->name);

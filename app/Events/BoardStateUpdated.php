@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Enums\Seat;
 use App\Models\Game;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -25,13 +26,12 @@ class BoardStateUpdated implements ShouldBroadcastNow, ShouldRescue
     use Dispatchable;
 
     /**
-     * @param  'host'|'guest'  $seat
      * @param  array<string, mixed>  $state  Already redacted by the sender.
      * @param  string  $session  Changes when the sender's board remounts, restarting $seq.
      */
     public function __construct(
         public readonly Game $game,
-        public readonly string $seat,
+        public readonly Seat $seat,
         public readonly array $state,
         public readonly string $session,
         public readonly int $seq,
@@ -52,7 +52,7 @@ class BoardStateUpdated implements ShouldBroadcastNow, ShouldRescue
     public function broadcastWith(): array
     {
         return [
-            'seat' => $this->seat,
+            'seat' => $this->seat->value,
             'session' => $this->session,
             'seq' => $this->seq,
             'state' => $this->state,

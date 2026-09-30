@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Seat;
 use App\Events\BoardStateUpdated;
 use App\Games\Participant;
 use App\Models\Game;
@@ -61,21 +62,17 @@ class BoardSyncController extends Controller
         ]);
 
         $game->forceFill([
-            "{$seat}_state" => $validated['state'],
-            "{$seat}_public_state" => $validated['public_state'],
-            "{$seat}_seq" => $validated['seq'],
+            $seat->column('state') => $validated['state'],
+            $seat->column('public_state') => $validated['public_state'],
+            $seat->column('seq') => $validated['seq'],
             'last_activity_at' => now(),
         ])->save();
 
         return response()->json(['saved' => true]);
     }
 
-    /**
-     * The caller's seat, or 403. A watcher has no board to send.
-     *
-     * @return 'host'|'guest'
-     */
-    private function seatOrAbort(Game $game, Request $request): string
+    /** The caller's seat, or 403. A watcher has no board to send. */
+    private function seatOrAbort(Game $game, Request $request): Seat
     {
         $seat = Participant::fromRequest($request)?->roleIn($game);
 
