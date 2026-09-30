@@ -16,6 +16,12 @@ use Illuminate\Support\Str;
  * every other question about "who is this" goes through it.
  *
  * @see documentation/anonymous-games/spec.md
+ *
+ * @property 'host'|'guest'|null $first_player
+ * @property array{host: array<int, int>, guest: array<int, int>, winner: 'host'|'guest', rerolls: int}|null $turn_order_roll
+ * @property int $turn_number
+ * @property 'host'|'guest'|null $active_seat
+ * @property string|null $turn_stop
  */
 class Game extends Model
 {
@@ -49,6 +55,11 @@ class Game extends Model
         'guest_seq',
         'host_accepted_at',
         'guest_accepted_at',
+        'first_player',
+        'turn_order_roll',
+        'turn_number',
+        'active_seat',
+        'turn_stop',
         'last_activity_at',
     ];
 
@@ -61,6 +72,7 @@ class Game extends Model
     protected $attributes = [
         'setup' => 'mlp',
         'status' => 'waiting',
+        'turn_number' => 0,
     ];
 
     /** The token hashes never leave the server. */
@@ -80,6 +92,8 @@ class Game extends Model
             'guest_seq' => 'integer',
             'host_accepted_at' => 'datetime',
             'guest_accepted_at' => 'datetime',
+            'turn_order_roll' => 'array',
+            'turn_number' => 'integer',
             'last_activity_at' => 'datetime',
         ];
     }
@@ -274,6 +288,56 @@ class Game extends Model
             "{$seat}_public_state" => null,
             "{$seat}_seq" => 0,
         ];
+    }
+
+    // ── Turn order ──────────────────────────────────────────────────────────
+
+    /** Turn order is settled once a first player is recorded. */
+    public function turnOrderDecided(): bool
+    {
+        return $this->first_player !== null;
+    }
+
+    /**
+     * Whether this seat is on the play. Null before turn order is decided, or
+     * for a seat that is not in this game.
+     */
+    public function goesFirst(?string $seat): ?bool
+    {
+        if (! in_array($seat, self::SEATS, true) || $this->first_player === null) {
+            return null;
+        }
+
+        return $seat === $this->first_player;
+    }
+
+    /**
+     * The seat that won the dice roll, or null before a roll. The winner only
+     * chooses who goes first, so this can differ from `first_player`.
+     *
+     * @return 'host'|'guest'|null
+     */
+    public function rollWinner(): ?string
+    {
+        return $this->turn_order_roll['winner'] ?? null;
+    }
+
+    // ── Turn cursor ─────────────────────────────────────────────────────────
+
+    public function turnStarted(): bool
+    {
+        return $this->turn_number > 0;
+    }
+
+    /**
+     * The seat entitled to move the cursor. `active_seat` is null until the
+     * first turn starts, so the player on the play opens the game.
+     *
+     * @return 'host'|'guest'|null
+     */
+    public function actingSeat(): ?string
+    {
+        return $this->active_seat ?? $this->first_player;
     }
 
     public function touchActivity(): void

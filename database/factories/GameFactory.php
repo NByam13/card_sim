@@ -68,6 +68,41 @@ class GameFactory extends Factory
     }
 
     /**
+     * The roll decided, and its winner elected who goes first. No turn started.
+     *
+     * @param  'host'|'guest'  $firstPlayer
+     * @param  'host'|'guest'|null  $rollWinner  defaults to the first player
+     */
+    public function turnOrderDecided(string $firstPlayer = 'host', ?string $rollWinner = null): static
+    {
+        $rollWinner ??= $firstPlayer;
+
+        return $this->state(fn () => [
+            'first_player' => $firstPlayer,
+            'turn_order_roll' => [
+                'host' => $rollWinner === 'host' ? [6, 5] : [2, 1],
+                'guest' => $rollWinner === 'guest' ? [6, 5] : [2, 1],
+                'winner' => $rollWinner,
+                'rerolls' => 0,
+            ],
+        ]);
+    }
+
+    /**
+     * A turn under way, with the cursor at a stop.
+     *
+     * @param  'host'|'guest'  $activeSeat
+     */
+    public function onTurn(int $turnNumber = 1, string $activeSeat = 'host', ?string $turnStop = 'main'): static
+    {
+        return $this->state(fn () => [
+            'turn_number' => $turnNumber,
+            'active_seat' => $activeSeat,
+            'turn_stop' => $turnStop,
+        ]);
+    }
+
+    /**
      * A deck snapshot in the shape PonyRec's deck endpoint returns. Small on
      * purpose: nothing in this slice reads a card.
      *
