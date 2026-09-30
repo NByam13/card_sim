@@ -2,7 +2,7 @@ import { http } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/types/cards';
-import { Seat, StateFrame, WireCursor } from './types';
+import { Seat, StateFrame, TurnOrderRoll, WireCursor } from './types';
 
 interface Member {
   id: string;
@@ -40,6 +40,8 @@ export function useGameSync({
   onSeatClaimed,
   onAccepted,
   onTurnAdvanced,
+  onTurnOrderRolled,
+  onTurnOrderDecided,
 }: {
   code: string;
   seat: Seat;
@@ -53,13 +55,33 @@ export function useGameSync({
   onAccepted: (accepted: Acceptance) => void;
   /** The shared turn cursor moved, by either seat. */
   onTurnAdvanced: (cursor: WireCursor) => void;
+  /** The dice were rolled. Also heard by the seat that rolled. */
+  onTurnOrderRolled: (roll: TurnOrderRoll) => void;
+  /** The roll winner chose who goes first. Also heard by the seat that chose. */
+  onTurnOrderDecided: (firstPlayer: Seat) => void;
 }): { opponentPresent: boolean; watching: number } {
   const [opponentPresent, setOpponentPresent] = useState(false);
   const [watching, setWatching] = useState(0);
 
   // Handlers ride a ref so a new closure does not tear the subscription down.
-  const handlers = useRef({ onFrame, onAnnounce, onSeatClaimed, onAccepted, onTurnAdvanced });
-  handlers.current = { onFrame, onAnnounce, onSeatClaimed, onAccepted, onTurnAdvanced };
+  const handlers = useRef({
+    onFrame,
+    onAnnounce,
+    onSeatClaimed,
+    onAccepted,
+    onTurnAdvanced,
+    onTurnOrderRolled,
+    onTurnOrderDecided,
+  });
+  handlers.current = {
+    onFrame,
+    onAnnounce,
+    onSeatClaimed,
+    onAccepted,
+    onTurnAdvanced,
+    onTurnOrderRolled,
+    onTurnOrderDecided,
+  };
 
   const { channel } = useEchoPresence(`game.${code}`, [], () => {});
 
@@ -96,13 +118,39 @@ export function useGameSync({
       .listen('.match.accepted', ({ accepted }: { accepted: Acceptance }) =>
         handlers.current.onAccepted(accepted)
       )
-      .listen('.turn.advanced', ({ cursor }: { cursor: WireCursor }) =>
-        handlers.current.onTurnAdvanced(cursor)
-      )
       .error((error: unknown) => console.error('game channel subscription failed', error));
+
+    listenForTurns(presence, {
+      onTurnAdvanced: (cursor) => handlers.current.onTurnAdvanced(cursor),
+      onTurnOrderRolled: (roll) => handlers.current.onTurnOrderRolled(roll),
+      onTurnOrderDecided: (firstPlayer) => handlers.current.onTurnOrderDecided(firstPlayer),
+    });
   }, [channel, seat]);
 
   return { opponentPresent, watching };
+}
+
+/** The turn events every viewer follows, seated or watching. */
+export interface TurnListeners {
+  onTurnAdvanced: (cursor: WireCursor) => void;
+  onTurnOrderRolled: (roll: TurnOrderRoll) => void;
+  onTurnOrderDecided: (firstPlayer: Seat) => void;
+}
+
+/** Bind the turn events on a game channel. */
+export function listenForTurns(
+  channel: { listen(event: string, callback: CallableFunction): unknown },
+  listeners: TurnListeners
+): void {
+  channel.listen('.turn.advanced', ({ cursor }: { cursor: WireCursor }) =>
+    listeners.onTurnAdvanced(cursor)
+  );
+  channel.listen('.turn_order.rolled', ({ roll }: { roll: TurnOrderRoll }) =>
+    listeners.onTurnOrderRolled(roll)
+  );
+  channel.listen('.turn_order.decided', ({ first_player }: { first_player: Seat }) =>
+    listeners.onTurnOrderDecided(first_player)
+  );
 }
 
 /**

@@ -253,7 +253,9 @@ function reducer(state: GameState, action: Action): GameState {
     case 'SET_GOING_FIRST':
       // Locked in once the board is dealt; flipping it later would imply a
       // re-deal the player did not ask for.
-      return state.started ? state : { ...state, goingFirst: action.goingFirst };
+      return state.started || state.goingFirst === action.goingFirst
+        ? state
+        : { ...state, goingFirst: action.goingFirst };
 
     case 'MULLIGAN': {
       // Rules 103.4.1a: the hand goes to the *bottom* of the Main Deck in its

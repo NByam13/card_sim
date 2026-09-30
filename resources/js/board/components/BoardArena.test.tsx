@@ -2,6 +2,7 @@ import { Card, Deck } from '@/types/cards';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { emptyZones } from '../setup';
+import { TurnCursor } from '../sync/types';
 import { CardInstance, GameState } from '../types';
 import BoardArena from './BoardArena';
 
@@ -187,16 +188,25 @@ describe('BoardArena, the table itself', () => {
 
 describe('BoardArena, in a match', () => {
   /** A board on the shared cursor whose turn start the test runs by hand, as if the server answered. */
-  function matchArena() {
+  function matchArena({
+    cursor = { turn_number: 3, active_seat: 'host', turn_stop: 'main', my_turn: true },
+    savedState = boardWithRetiredCard(),
+    goingFirst = true,
+  }: {
+    cursor?: TurnCursor;
+    savedState?: GameState | null;
+    goingFirst?: boolean | null;
+  } = {}) {
     const onState = vi.fn();
-    const turnCursor = { advance: vi.fn(), stepBack: vi.fn() };
+    const turnCursor = { cursor, advance: vi.fn(), stepBack: vi.fn() };
     render(
       <BoardArena
         deck={deck}
         scale={1}
-        savedState={boardWithRetiredCard()}
+        savedState={savedState}
         onState={onState}
         turnCursor={turnCursor}
+        goingFirst={goingFirst}
       />
     );
 
@@ -234,5 +244,35 @@ describe('BoardArena, in a match', () => {
 
     expect(latest().zones.library).toHaveLength(0);
     expect(screen.getByText(/Main Deck empty/)).toBeInTheDocument();
+  });
+
+  it('labels the turn button with what the next press does', () => {
+    matchArena();
+
+    expect(screen.getByRole('button', { name: 'Contact' })).toBeEnabled();
+  });
+
+  it('leaves the turn button inert when it is not your turn', () => {
+    matchArena({
+      cursor: { turn_number: 3, active_seat: 'guest', turn_stop: 'main', my_turn: false },
+    });
+
+    expect(screen.getByRole('button', { name: 'Not your turn' })).toBeDisabled();
+  });
+
+  it('holds Start Game and the turn button, and hides the going-first toggle, until turn order is decided', () => {
+    matchArena({ savedState: null, goingFirst: null });
+
+    const deciding = screen.getAllByRole('button', { name: 'Deciding turn order' });
+    expect(deciding).toHaveLength(2);
+    deciding.forEach((button) => expect(button).toBeDisabled());
+    expect(screen.queryByRole('button', { name: 'Going 1st' })).toBeNull();
+  });
+
+  it('takes who is on the play from the match', () => {
+    const { latest } = matchArena({ savedState: null, goingFirst: false });
+
+    expect(latest().goingFirst).toBe(false);
+    expect(screen.getByRole('button', { name: 'Start Game' })).toBeEnabled();
   });
 });

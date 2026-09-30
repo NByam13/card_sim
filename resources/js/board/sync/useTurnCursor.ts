@@ -21,7 +21,8 @@ export function useTurnCursor({
   cursor: served,
 }: {
   code: string;
-  seat: Seat;
+  /** Null for a watcher, who only follows the cursor. */
+  seat: Seat | null;
   /** The cursor on the show payload. A new object means a fresh one from the server. */
   cursor: TurnCursor;
 }): {
@@ -43,7 +44,11 @@ export function useTurnCursor({
     setCursor(next);
   }, []);
 
-  useEffect(() => apply(served), [apply, served]);
+  // A reload answered before a broadcast it arrives after is older than the cursor already held.
+  useEffect(() => {
+    if (served.turn_number < latest.current.turn_number) return;
+    apply(served);
+  }, [apply, served]);
 
   // The mover hears its own `.turn.advanced` too, and that echo can land after the response.
   const receive = useCallback(

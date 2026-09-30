@@ -62,6 +62,7 @@ class GameController extends Controller
             'game' => $this->payload($game, $seat),
             'seat' => $seat?->value,
             'cursor' => $game->phaseState($seat),
+            'turnOrder' => $game->turnOrder(),
             // The same link for both jobs: it offers the free seat while one is
             // open, and brings spectators in once the game is full.
             'inviteUrl' => route('games.show', $game),

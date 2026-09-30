@@ -2,12 +2,14 @@ import { accept, destroy } from '@/actions/App/Http/Controllers/GameController';
 import BoardArena from '@/board/components/BoardArena';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
+import SeamBar from '@/board/components/SeamBar';
 import { CompactGameState, expandState } from '@/board/sync/persist';
-import { PublicState, TurnCursor } from '@/board/sync/types';
+import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
 import { useBoardRelay } from '@/board/sync/useBoardRelay';
-import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
+import { Acceptance, listenForTurns, lookupCard, useGameSync } from '@/board/sync/useGameSync';
 import { useMirror } from '@/board/sync/useMirror';
 import { useTurnCursor } from '@/board/sync/useTurnCursor';
+import { useTurnOrder } from '@/board/sync/useTurnOrder';
 import ZoomControls from '@/board/components/ZoomControls';
 import { GameState } from '@/board/types';
 import { usePersistentZoom } from '@/board/zoom';
@@ -51,6 +53,7 @@ interface Props {
   game: Game;
   seat: Seat | null;
   cursor: TurnCursor;
+  turnOrder: TurnOrder;
   inviteUrl: string;
   canJoin: boolean;
   canCancel: boolean;
@@ -68,7 +71,15 @@ interface Props {
  * A watcher stays on the lobby regardless — they get a board of their own to
  * mirror in the slice after this one.
  */
-export default function Show({ game, seat, cursor, inviteUrl, canJoin, canCancel }: Props) {
+export default function Show({
+  game,
+  seat,
+  cursor,
+  turnOrder,
+  inviteUrl,
+  canJoin,
+  canCancel,
+}: Props) {
   const [cancelled, setCancelled] = useState(false);
   const [solo, setSolo] = useState(false);
 
@@ -87,6 +98,7 @@ export default function Show({ game, seat, cursor, inviteUrl, canJoin, canCancel
         game={game}
         seat={seat}
         cursor={cursor}
+        turnOrder={turnOrder}
         deck={game.deck}
         onWaitingRoom={seated ? null : () => setSolo(false)}
       />
@@ -120,7 +132,14 @@ export default function Show({ game, seat, cursor, inviteUrl, canJoin, canCancel
               made: the browser that joins as a watcher and then takes a seat
               would otherwise stay a watcher to everyone here, including itself.
             */}
-            <Table key={seat ?? 'watching'} game={game} seat={seat} onCancelled={onCancelled} />
+            <Table
+              key={seat ?? 'watching'}
+              game={game}
+              seat={seat}
+              cursor={cursor}
+              turnOrder={turnOrder}
+              onCancelled={onCancelled}
+            />
 
             <InviteLink url={inviteUrl} full={!canJoin && game.seats.guest.claimed} />
             {canJoin && <JoinForm code={game.code} />}
@@ -176,12 +195,14 @@ function Playing({
   game,
   seat,
   cursor,
+  turnOrder: servedTurnOrder,
   deck,
   onWaitingRoom,
 }: {
   game: Game;
   seat: Seat;
   cursor: TurnCursor;
+  turnOrder: TurnOrder;
   deck: Deck;
   /** Back to the lobby, or null once the second seat is taken and there is no lobby left to want. */
   onWaitingRoom: (() => void) | null;
@@ -212,12 +233,16 @@ function Playing({
   });
   const { mirror, receive } = useMirror(lookupCard, game.opponent_state);
   const turn = useTurnCursor({ code: game.code, seat, cursor });
+  const order = useTurnOrder({ code: game.code, turnOrder: servedTurnOrder });
+  const firstPlayer = order.turnOrder.first_player;
   const { opponentPresent } = useGameSync({
     code: game.code,
     seat,
     onFrame: receive,
     onAnnounce: announce,
     onTurnAdvanced: turn.receive,
+    onTurnOrderRolled: order.receiveRoll,
+    onTurnOrderDecided: order.receiveDecided,
     // Presence cannot tell a watcher from the player who just sat down, and the
     // props this page is holding predate the claim either way.
     onSeatClaimed: useCallback(() => router.reload({ only: ['game'] }), []),
@@ -247,7 +272,7 @@ function Playing({
   const arenaKey = matchLive ? 'match' : 'solo';
   const savedState = matchLive && !liveOnMount ? null : restored;
 
-  const opponentName = game.seats[opponent].name ?? (opponent === 'host' ? 'Host' : 'Guest');
+  const opponentName = seatNames(game)[opponent];
   // A full visit rather than a bare POST: the board deals fresh from props that
   // no longer carry a saved state, which is what accepting means.
   const acceptMatch = useCallback(() => router.post(accept.url(game.code)), [game.code]);
@@ -288,6 +313,24 @@ function Playing({
           // affordance only.
           canRestart={!matchLive}
           turnCursor={matchLive ? turn : undefined}
+          goingFirst={matchLive ? (firstPlayer ? firstPlayer === seat : null) : undefined}
+          seam={
+            matchLive
+              ? (onAdvance) => (
+                  <div className="mb-3">
+                    <SeamBar
+                      seat={seat}
+                      names={seatNames(game)}
+                      cursor={turn.cursor}
+                      turnOrder={order.turnOrder}
+                      onRoll={order.roll}
+                      onElect={order.elect}
+                      onAdvance={onAdvance}
+                    />
+                  </div>
+                )
+              : undefined
+          }
           header={
             seated ? (
               <div className="mb-3">
@@ -324,6 +367,13 @@ function Playing({
       )}
     </>
   );
+}
+
+function seatNames(game: Game): Record<Seat, string> {
+  return {
+    host: game.seats.host.name ?? 'Host',
+    guest: game.seats.guest.name ?? 'Guest',
+  };
 }
 
 /**
@@ -446,13 +496,19 @@ function Cancelled() {
 function Table({
   game,
   seat,
+  cursor,
+  turnOrder,
   onCancelled,
 }: {
   game: Game;
   seat: Seat | null;
+  cursor: TurnCursor;
+  turnOrder: TurnOrder;
   onCancelled: () => void;
 }) {
   const [members, setMembers] = useState<Member[]>([]);
+  const turn = useTurnCursor({ code: game.code, seat, cursor });
+  const order = useTurnOrder({ code: game.code, turnOrder });
 
   // The page's one subscription, on purpose: channels are reference-counted, so
   // a second one here would keep the first alive through the remount above and
@@ -481,13 +537,27 @@ function Table({
       )
       .listen('.game.cancelled', onCancelled)
       .error((error: unknown) => console.error('game channel subscription failed', error));
-  }, [channel, onCancelled]);
+
+    listenForTurns(presence, {
+      onTurnAdvanced: turn.receive,
+      onTurnOrderRolled: order.receiveRoll,
+      onTurnOrderDecided: order.receiveDecided,
+    });
+  }, [channel, onCancelled, turn.receive, order.receiveRoll, order.receiveDecided]);
 
   const present = (role: Role) => members.some((m) => m.role === role);
   const watching = members.filter((m) => m.role === 'spectator').length;
 
   return (
     <div className="space-y-2">
+      {!seat && game.status === 'active' && (
+        <SeamBar
+          seat={null}
+          names={seatNames(game)}
+          cursor={turn.cursor}
+          turnOrder={order.turnOrder}
+        />
+      )}
       <ul className="divide-y divide-gray-200 rounded border border-gray-200">
         {(['host', 'guest'] as Seat[]).map((which) => {
           const state = game.seats[which];

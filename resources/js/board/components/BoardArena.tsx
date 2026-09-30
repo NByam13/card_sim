@@ -3,6 +3,8 @@ import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { BoardCardViewProvider, BoardFocusProvider, BoardTokensProvider } from '../context';
 import { useHoverFollowsPointer } from '../hoverTarget';
 import { MlpGameZone, MlpOutOfPlayBar } from '../mlp/MlpTable';
+import { advanceLabel } from '../mlp/turnTrack';
+import { TurnCursor } from '../sync/types';
 import {
   EMPTY_SELECTION,
   pruneSelection,
@@ -59,7 +61,9 @@ export default function BoardArena({
   onState,
   canRestart = true,
   header,
+  seam,
   turnCursor,
+  goingFirst,
 }: {
   deck: Deck;
   /** Card zoom factor (the board itself stays at 1×; only cards scale). */
@@ -80,15 +84,23 @@ export default function BoardArena({
    * the board instead.
    */
   header?: ReactNode;
+  /** The seam bar, below `header`. Handed the same advance as the rail's turn button. */
+  seam?: (onAdvance: () => void) => ReactNode;
   /**
    * The shared turn cursor in a live match. Absent in solo, where the next turn
    * is local alone.
    */
   turnCursor?: {
+    cursor: TurnCursor;
     /** Runs `onTurnStart` once the press that starts the turn is accepted. */
     advance: (onTurnStart: () => void) => void;
     stepBack: () => void;
   };
+  /**
+   * Whether this seat is on the play, as a match's turn order settled it: null
+   * until it is. Undefined in solo, where the board's own toggle decides.
+   */
+  goingFirst?: boolean | null;
 }) {
   const { state, dispatch } = useGame(deck, savedState);
   const { message, show, toast } = useToast();
@@ -151,6 +163,10 @@ export default function BoardArena({
     return () => window.removeEventListener('keydown', onKey);
   }, [selection, viewer, showShortcuts, viewing, clearSelection]);
 
+  useEffect(() => {
+    if (goingFirst !== undefined) dispatch({ type: 'SET_GOING_FIRST', goingFirst });
+  }, [goingFirst, dispatch]);
+
   // The callback rides a ref so the effect fires on state changes only — a
   // parent re-render with a fresh closure must not re-announce an unchanged
   // state.
@@ -193,6 +209,13 @@ export default function BoardArena({
   const nextTurnRef = useRef(nextTurn);
   nextTurnRef.current = nextTurn;
   const advanceTurn = turnCursor ? () => turnCursor.advance(() => nextTurnRef.current()) : nextTurn;
+  const turnOrderPending = turnCursor !== undefined && goingFirst === null;
+  const matchAdvance = turnCursor && !turnOrderPending ? advanceLabel(turnCursor.cursor) : null;
+  const nextTurnLabel = !turnCursor
+    ? 'Next Turn'
+    : turnOrderPending
+      ? 'Deciding turn order'
+      : (matchAdvance ?? 'Not your turn');
 
   const revealScene = () => {
     if (state.zones.sceneDeck.length === 0) {
@@ -279,14 +302,21 @@ export default function BoardArena({
       <BoardControls
         started={state.started}
         goingFirst={state.goingFirst}
-        onGoingFirstChange={(value) => dispatch({ type: 'SET_GOING_FIRST', goingFirst: value })}
+        onGoingFirstChange={
+          goingFirst === undefined
+            ? (value) => dispatch({ type: 'SET_GOING_FIRST', goingFirst: value })
+            : undefined
+        }
         onStartGame={() => dispatch({ type: 'START_GAME' })}
+        canStart={goingFirst !== null}
         mulliganed={state.mulliganed}
         onMulligan={() => dispatch({ type: 'MULLIGAN' })}
         onRestart={canRestart ? () => dispatch({ type: 'RESTART' }) : null}
         onShuffleLibrary={() => dispatch({ type: 'SHUFFLE_LIBRARY' })}
         onDraw={draw}
         onNextTurn={advanceTurn}
+        nextTurnLabel={nextTurnLabel}
+        canAdvance={!turnCursor || matchAdvance !== null}
       />
       <Randomizers onResult={toast} />
       <ShortcutsButton onClick={toggleShortcuts} />
@@ -307,6 +337,7 @@ export default function BoardArena({
             header={
               <>
                 {header}
+                {seam?.(advanceTurn)}
                 {issues.length > 0 && !noticeDismissed && (
                   <div className="mb-3 flex items-start justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
                     <span>Incomplete deck — playing what&rsquo;s here ({issues.join(', ')}).</span>

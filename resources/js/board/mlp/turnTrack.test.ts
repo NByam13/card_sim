@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TurnCursor } from '../sync/types';
 import {
+  advanceLabel,
   CursorMove,
   FIRST_CONTACT_TURN,
   next,
@@ -115,5 +116,32 @@ describe('startsTurn', () => {
     expect(startsTurn(cursor(), { turn_stop: 'main' })).toBe(true);
     expect(startsTurn(cursor({ turn_stop: 'main' }), { turn_stop: 'contact:1' })).toBe(false);
     expect(startsTurn(cursor({ turn_stop: 'end' }), { ends_turn: true })).toBe(false);
+  });
+});
+
+describe('advanceLabel', () => {
+  it('names what each press on turn 3 does', () => {
+    const stops = [null, 'main', 'contact:1', 'contact:2', 'contact:3', 'end'];
+
+    expect(stops.map((turn_stop) => advanceLabel(cursor({ turn_stop })))).toEqual([
+      'Start turn',
+      'Contact',
+      'Lane 2',
+      'Lane 3',
+      'End phase',
+      'End turn',
+    ]);
+  });
+
+  it('goes from main straight to the end phase before contact is legal', () => {
+    expect(advanceLabel(cursor({ turn_number: 1, turn_stop: 'main' }))).toBe('End phase');
+  });
+
+  it('opens the game from turn 0', () => {
+    expect(advanceLabel(cursor({ turn_number: 0, active_seat: null }))).toBe('Start turn');
+  });
+
+  it('has nothing to say when it is not your turn', () => {
+    expect(advanceLabel(cursor({ turn_stop: 'main', my_turn: false }))).toBeNull();
   });
 });
