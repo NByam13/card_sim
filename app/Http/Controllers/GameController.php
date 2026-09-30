@@ -110,14 +110,15 @@ class GameController extends Controller
      */
     public function accept(Game $game, Request $request): RedirectResponse
     {
-        $seat = Participant::fromRequest($request)?->roleIn($game);
-
-        abort_if($seat === null, 403, 'Only a seated player can accept a match.');
-
         // Accepting before the other seat exists would go live the moment it is
         // claimed — joining is accepting — and nothing would clear the board
         // this seat built while it waited.
-        abort_if($game->status !== 'active', 403, 'There is no second seat to accept yet.');
+        $seat = $this->activeSeatOrAbort(
+            $game,
+            $request,
+            'Only a seated player can accept a match.',
+            'There is no second seat to accept yet.',
+        );
 
         $game->acceptFor($seat);
 

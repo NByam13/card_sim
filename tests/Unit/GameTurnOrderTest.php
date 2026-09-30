@@ -152,6 +152,56 @@ class GameTurnOrderTest extends TestCase
         $this->assertNotSame(array_sum($roll['host']), array_sum($roll['guest']));
     }
 
+    public function test_recording_a_roll_takes_it_without_a_reload(): void
+    {
+        $game = Game::factory()->create();
+        $roll = Game::rollForTurnOrder();
+
+        $this->assertTrue($game->recordTurnOrderRoll($roll));
+
+        $this->assertSame($roll, $game->turn_order_roll);
+        $this->assertFalse($game->isDirty());
+        $this->assertSame($roll, $game->fresh()->turn_order_roll);
+    }
+
+    /** A seat whose copy of the game predates the other seat's roll. */
+    public function test_a_stale_roll_loses_and_picks_up_the_stored_one(): void
+    {
+        $game = Game::factory()->create();
+        $stale = Game::find($game->id);
+        $stored = Game::rollForTurnOrder();
+        $game->recordTurnOrderRoll($stored);
+
+        $this->assertFalse($stale->recordTurnOrderRoll(Game::rollForTurnOrder()));
+
+        $this->assertSame($stored, $stale->turn_order_roll);
+        $this->assertSame($stored, $game->fresh()->turn_order_roll);
+    }
+
+    public function test_a_losing_election_leaves_the_model_as_it_was(): void
+    {
+        $game = Game::factory()->turnOrderRolled(Seat::Host)->create();
+        $stale = Game::find($game->id);
+        $game->electFirstPlayer(Seat::Guest);
+
+        $this->assertFalse($stale->electFirstPlayer(Seat::Host));
+
+        $this->assertNull($stale->first_player);
+        $this->assertFalse($stale->isDirty());
+        $this->assertSame(Seat::Guest, $game->fresh()->first_player);
+    }
+
+    public function test_writing_turn_order_leaves_other_unsaved_changes_alone(): void
+    {
+        $game = Game::factory()->create();
+        $game->host_name = 'Unsaved';
+
+        $game->recordTurnOrderRoll(Game::rollForTurnOrder());
+
+        $this->assertTrue($game->isDirty('host_name'));
+        $this->assertSame('Host', $game->fresh()->host_name);
+    }
+
     /** A die that rolls these faces in order. */
     private function dice(int ...$faces): Closure
     {

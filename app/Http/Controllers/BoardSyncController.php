@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Enums\Seat;
 use App\Events\BoardStateUpdated;
-use App\Games\Participant;
 use App\Models\Game;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +25,7 @@ class BoardSyncController extends Controller
     /** Relay this seat's redacted board to everyone else at the table. */
     public function relay(Game $game, Request $request): JsonResponse
     {
-        $seat = $this->seatOrAbort($game, $request);
+        $seat = $this->activeSeatOrAbort($game, $request);
 
         // A board played alone is nobody else's business. The browser already
         // holds its frames back until the match is live; this is the same rule
@@ -53,7 +52,7 @@ class BoardSyncController extends Controller
     /** Save this seat's board, whole and redacted, so a refresh resumes it. */
     public function save(Game $game, Request $request): JsonResponse
     {
-        $seat = $this->seatOrAbort($game, $request);
+        $seat = $this->activeSeatOrAbort($game, $request);
 
         $validated = $request->validate([
             'seq' => ['required', 'integer', 'min:0'],
@@ -69,15 +68,5 @@ class BoardSyncController extends Controller
         ])->save();
 
         return response()->json(['saved' => true]);
-    }
-
-    /** The caller's seat, or 403. A watcher has no board to send. */
-    private function seatOrAbort(Game $game, Request $request): Seat
-    {
-        $seat = Participant::fromRequest($request)?->roleIn($game);
-
-        abort_if($seat === null || $game->status !== 'active', 403);
-
-        return $seat;
     }
 }

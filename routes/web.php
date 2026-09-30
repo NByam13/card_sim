@@ -4,6 +4,7 @@ use App\Http\Controllers\BoardSyncController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\TurnOrderController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -27,6 +28,9 @@ Route::delete('/games/{game}', [GameController::class, 'destroy'])->name('games.
 // A seat's board, leaving the browser. Both derive the seat from the session.
 Route::post('/games/{game}/sync', [BoardSyncController::class, 'relay'])->name('games.sync');
 Route::post('/games/{game}/state', [BoardSyncController::class, 'save'])->name('games.state');
+
+Route::post('/games/{game}/turn-order/roll', [TurnOrderController::class, 'roll'])->name('games.turn-order.roll');
+Route::post('/games/{game}/turn-order/elect', [TurnOrderController::class, 'elect'])->name('games.turn-order.elect');
 
 // Cards a mirror meets that its own deck does not carry. `where` so a number
 // containing a dot still routes. Throttled because the number space is open and

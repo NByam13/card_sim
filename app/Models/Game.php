@@ -7,6 +7,7 @@ use Closure;
 use Database\Factories\GameFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 /**
@@ -336,6 +337,58 @@ class Game extends Model
         }
 
         return ['host' => [6, 6], 'guest' => [1, 1], 'winner' => Seat::Host->value, 'rerolls' => self::MAX_TURN_ORDER_REROLLS];
+    }
+
+    /**
+     * Store a roll unless one is already stored. Returns whether this call's roll
+     * was the one kept; either way the model holds the stored roll afterwards.
+     *
+     * The conditional update settles both seats rolling at once.
+     *
+     * @param  array{host: array<int, int>, guest: array<int, int>, winner: 'host'|'guest', rerolls: int}  $roll
+     */
+    public function recordTurnOrderRoll(array $roll): bool
+    {
+        if ($this->fillIfNull('turn_order_roll', $roll)) {
+            return true;
+        }
+
+        $this->refresh();
+
+        return false;
+    }
+
+    /**
+     * Record who goes first unless it is already decided. Returns whether this
+     * call's choice was the one kept; the model is left as it was when it was not.
+     */
+    public function electFirstPlayer(Seat $firstPlayer): bool
+    {
+        return $this->fillIfNull('first_player', $firstPlayer);
+    }
+
+    /**
+     * Write a column only while it is still null. On success the model takes the
+     * written values without a reload; on failure it is left as it was.
+     */
+    private function fillIfNull(string $column, mixed $value): bool
+    {
+        $columns = [$column, 'last_activity_at'];
+        $before = Arr::only($this->getAttributes(), $columns);
+
+        $this->forceFill([$column => $value, 'last_activity_at' => now()]);
+
+        $filled = self::whereKey($this->id)
+            ->whereNull($column)
+            ->update(Arr::only($this->getAttributes(), $columns)) === 1;
+
+        if ($filled) {
+            $this->syncOriginalAttributes($columns);
+        } else {
+            $this->setRawAttributes([...$this->getAttributes(), ...$before]);
+        }
+
+        return $filled;
     }
 
     // ── Turn cursor ─────────────────────────────────────────────────────────
