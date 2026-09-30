@@ -147,9 +147,7 @@ export function MlpGameZone({
       {mirrored ? counterweight : rail}
 
       {/* Centre: Adventure lanes → Story stages → Scene Zone, reversed in a mirror. */}
-      <div
-        className={`flex justify-between space-y-3 ${mirrored ? 'flex-col-reverse' : 'flex-col'}`}
-      >
+      <div className={`flex justify-between gap-3 ${mirrored ? 'flex-col-reverse' : 'flex-col'}`}>
         {/*
           Lanes stay centred in the column so they line up with the opponent's
           across the seam. The Reveal Zone lives in a gutter beside them — the

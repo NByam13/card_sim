@@ -319,9 +319,10 @@ export default function BoardShell({
                       {rail && (
                         <div
                           data-no-marquee
-                          className="flex shrink-0 flex-col items-center space-y-2 overflow-y-auto py-3 pr-4 select-text sm:pr-6 lg:pr-8"
+                          className="flex shrink-0 flex-col overflow-y-auto py-3 pr-4 pl-3 select-text sm:pr-6 lg:pr-8"
                         >
-                          {rail}
+                          {/* Auto margins centre it without clipping the top once it overflows. */}
+                          <div className="my-auto flex flex-col items-center space-y-2">{rail}</div>
                         </div>
                       )}
                     </div>
