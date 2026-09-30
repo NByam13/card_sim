@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Seat;
 use App\Events\GameCancelled;
 use App\Events\MatchAccepted;
 use App\Games\Participant;
@@ -57,14 +58,14 @@ class GameController extends Controller
 
         return Inertia::render('games/show', [
             'game' => $this->payload($game, $seat),
-            'seat' => $seat,
+            'seat' => $seat?->value,
             // The same link for both jobs: it offers the free seat while one is
             // open, and brings spectators in once the game is full.
             'inviteUrl' => route('games.show', $game),
             'canJoin' => $seat === null && $game->guestSeatOpen(),
             // The same rule `destroy()` enforces, so the button is only ever
             // offered where the request behind it would be allowed.
-            'canCancel' => $seat === 'host' && $game->status === 'waiting',
+            'canCancel' => $seat === Seat::Host && $game->status === 'waiting',
         ]);
     }
 
@@ -132,7 +133,7 @@ class GameController extends Controller
     {
         $participant = Participant::fromRequest($request);
 
-        abort_if($participant?->roleIn($game) !== 'host', 403, 'Only the host can cancel this game.');
+        abort_if($participant?->roleIn($game) !== Seat::Host, 403, 'Only the host can cancel this game.');
         abort_if($game->status !== 'waiting', 403, 'This game has already started.');
 
         $game->delete();
@@ -155,28 +156,27 @@ class GameController extends Controller
      * and hydrating their cards is the sync slice's job, from the frames they
      * choose to send.
      *
-     * @param  'host'|'guest'|null  $seat
      * @return array<string, mixed>
      */
-    private function payload(Game $game, ?string $seat): array
+    private function payload(Game $game, ?Seat $seat): array
     {
         return [
             'code' => $game->code,
             'setup' => $game->setup,
             'status' => $game->status,
             'seats' => [
-                'host' => [
-                    'name' => $game->nameFor('host'),
-                    'deck_name' => $game->deckNameFor('host'),
+                Seat::Host->value => [
+                    'name' => $game->nameFor(Seat::Host),
+                    'deck_name' => $game->deckNameFor(Seat::Host),
                     'claimed' => true,
                 ],
-                'guest' => [
-                    'name' => $game->guest_token_hash ? $game->nameFor('guest') : null,
-                    'deck_name' => $game->deckNameFor('guest'),
+                Seat::Guest->value => [
+                    'name' => $game->guest_token_hash ? $game->nameFor(Seat::Guest) : null,
+                    'deck_name' => $game->deckNameFor(Seat::Guest),
                     'claimed' => $game->guest_token_hash !== null,
                 ],
             ],
-            'you' => $seat,
+            'you' => $seat?->value,
             // Which seats are ready to play each other. A seat playing alone has
             // accepted nothing, and boards are only relayed once both have.
             'accepted' => $game->acceptance(),
@@ -189,7 +189,7 @@ class GameController extends Controller
             // match is live, on the same rule the relay follows: a board played
             // alone is nobody else's business.
             'opponent_state' => $seat && $game->matchIsLive()
-                ? $game->publicStateFor($game->opposingSeat($seat))
+                ? $game->publicStateFor($seat->opposing())
                 : null,
         ];
     }

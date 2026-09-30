@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Games;
 
+use App\Enums\Seat;
 use App\Models\Game;
 use Database\Factories\GameFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,7 +56,7 @@ class OpenGameTest extends TestCase
 
         $this->post('/games', ['deck_code' => 'abcdef123456']);
 
-        $this->assertSame('As imported', Game::sole()->deckNameFor('host'));
+        $this->assertSame('As imported', Game::sole()->deckNameFor(Seat::Host));
     }
 
     public function test_the_host_holds_a_seat_afterwards(): void
@@ -90,7 +91,7 @@ class OpenGameTest extends TestCase
 
         $this->assertSame(64, strlen(Game::sole()->host_token_hash));
         $this->assertNotSame($token, Game::sole()->host_token_hash);
-        $this->assertSame('host', Game::sole()->seatFor($token));
+        $this->assertSame(Seat::Host, Game::sole()->seatFor($token));
     }
 
     // ── Deck import failures ────────────────────────────────────────────────
@@ -157,6 +158,6 @@ class OpenGameTest extends TestCase
 
         $game = Game::sole();
         $this->assertNull($game->host_name);
-        $this->assertSame('Host', $game->nameFor('host'));
+        $this->assertSame('Host', $game->nameFor(Seat::Host));
     }
 }

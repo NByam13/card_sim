@@ -34,7 +34,7 @@ class GameChannel
         if ($seat !== null) {
             return [
                 'id' => $participant->id,
-                'role' => $seat,
+                'role' => $seat->value,
                 'name' => $game->nameFor($seat),
             ];
         }

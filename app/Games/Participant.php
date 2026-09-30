@@ -2,6 +2,7 @@
 
 namespace App\Games;
 
+use App\Enums\Seat;
 use App\Models\Game;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
@@ -51,10 +52,8 @@ final readonly class Participant implements Authenticatable
 
     /**
      * The seat this participant holds in a game, or null when watching.
-     *
-     * @return 'host'|'guest'|null
      */
-    public function roleIn(Game $game): ?string
+    public function roleIn(Game $game): ?Seat
     {
         return $game->seatFor($this->seatTokens[$game->code] ?? null);
     }

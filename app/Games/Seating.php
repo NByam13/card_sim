@@ -2,6 +2,7 @@
 
 namespace App\Games;
 
+use App\Enums\Seat;
 use App\Events\SeatClaimed;
 use App\Models\Game;
 use Illuminate\Http\Request;
@@ -82,7 +83,7 @@ final class Seating
 
         // Everyone else is holding a copy of this game from before the seat was
         // taken, and no amount of presence tells them otherwise.
-        SeatClaimed::dispatch($game->refresh(), 'guest');
+        SeatClaimed::dispatch($game->refresh(), Seat::Guest);
 
         return true;
     }

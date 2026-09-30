@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Enums\Seat;
 use App\Models\Game;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -24,10 +25,9 @@ class MatchAccepted implements ShouldBroadcastNow, ShouldRescue
 {
     use Dispatchable;
 
-    /** @param  'host'|'guest'  $seat */
     public function __construct(
         public readonly Game $game,
-        public readonly string $seat,
+        public readonly Seat $seat,
     ) {}
 
     /** @return array<int, PresenceChannel> */
@@ -45,7 +45,7 @@ class MatchAccepted implements ShouldBroadcastNow, ShouldRescue
     public function broadcastWith(): array
     {
         return [
-            'seat' => $this->seat,
+            'seat' => $this->seat->value,
             'accepted' => $this->game->acceptance(),
         ];
     }

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\Seat;
 use App\Games\Seating;
 use App\Models\Game;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -70,30 +71,26 @@ class GameFactory extends Factory
     /**
      * The roll decided, and its winner elected who goes first. No turn started.
      *
-     * @param  'host'|'guest'  $firstPlayer
-     * @param  'host'|'guest'|null  $rollWinner  defaults to the first player
+     * @param  Seat|null  $rollWinner  defaults to the first player
      */
-    public function turnOrderDecided(string $firstPlayer = 'host', ?string $rollWinner = null): static
+    public function turnOrderDecided(Seat $firstPlayer = Seat::Host, ?Seat $rollWinner = null): static
     {
         $rollWinner ??= $firstPlayer;
 
+        $roll = ['winner' => $rollWinner->value, 'rerolls' => 0];
+
+        foreach (Seat::cases() as $seat) {
+            $roll[$seat->value] = $seat === $rollWinner ? [6, 5] : [2, 1];
+        }
+
         return $this->state(fn () => [
             'first_player' => $firstPlayer,
-            'turn_order_roll' => [
-                'host' => $rollWinner === 'host' ? [6, 5] : [2, 1],
-                'guest' => $rollWinner === 'guest' ? [6, 5] : [2, 1],
-                'winner' => $rollWinner,
-                'rerolls' => 0,
-            ],
+            'turn_order_roll' => $roll,
         ]);
     }
 
-    /**
-     * A turn under way, with the cursor at a stop.
-     *
-     * @param  'host'|'guest'  $activeSeat
-     */
-    public function onTurn(int $turnNumber = 1, string $activeSeat = 'host', ?string $turnStop = 'main'): static
+    /** A turn under way, with the cursor at a stop. */
+    public function onTurn(int $turnNumber = 1, Seat $activeSeat = Seat::Host, ?string $turnStop = 'main'): static
     {
         return $this->state(fn () => [
             'turn_number' => $turnNumber,
