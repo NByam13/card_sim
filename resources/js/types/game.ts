@@ -22,3 +22,11 @@ export const SPECTATOR_ROLE = 'spectator';
 
 /** Who a channel member is: a seat, or watching. */
 export type Role = Seat | typeof SPECTATOR_ROLE;
+
+/** How many games a match is played over. Mirrors `app/Enums/MatchFormat.php`; keep the two in step. */
+export const MatchFormat = {
+  Bo1: 'bo1',
+  Bo3: 'bo3',
+} as const;
+
+export type MatchFormat = (typeof MatchFormat)[keyof typeof MatchFormat];

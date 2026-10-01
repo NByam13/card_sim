@@ -1,5 +1,6 @@
 import { accept, destroy } from '@/actions/App/Http/Controllers/GameController';
 import BoardArena from '@/board/components/BoardArena';
+import MatchFormatToggle from '@/components/MatchFormatToggle';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
 import SeamBar from '@/board/components/SeamBar';
@@ -16,7 +17,7 @@ import ZoomControls from '@/board/components/ZoomControls';
 import { GameState } from '@/board/types';
 import { usePersistentZoom } from '@/board/zoom';
 import { Deck } from '@/types/cards';
-import { GameStatus, opposingSeat, Role, Seat, SPECTATOR_ROLE } from '@/types/game';
+import { GameStatus, MatchFormat, opposingSeat, Role, Seat, SPECTATOR_ROLE } from '@/types/game';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
@@ -31,6 +32,7 @@ interface Game {
   code: string;
   setup: string;
   status: GameStatus;
+  format: MatchFormat;
   seats: Record<Seat, SeatState>;
   you: Seat | null;
   /** Which seats are ready to play each other. Both means the match is live. */
@@ -57,6 +59,8 @@ interface Props {
   inviteUrl: string;
   canJoin: boolean;
   canCancel: boolean;
+  /** Host only, until the match is live. */
+  canChangeFormat: boolean;
 }
 
 /**
@@ -79,9 +83,12 @@ export default function Show({
   inviteUrl,
   canJoin,
   canCancel,
+  canChangeFormat,
 }: Props) {
   const [cancelled, setCancelled] = useState(false);
   const [solo, setSolo] = useState(false);
+  const [format, setFormat] = useState<MatchFormat>(game.format);
+  useEffect(() => setFormat(game.format), [game.format]);
 
   // Stable, so the channel's handlers are bound once rather than on every
   // render of this page.
@@ -134,7 +141,15 @@ export default function Show({
               made: the browser that joins as a watcher and then takes a seat
               would otherwise stay a watcher to everyone here, including itself.
             */}
-            <Table key={seat ?? 'watching'} game={game} seat={seat} onCancelled={onCancelled} />
+            <Table
+              key={seat ?? 'watching'}
+              game={game}
+              seat={seat}
+              onCancelled={onCancelled}
+              onFormatChanged={setFormat}
+            />
+
+            <MatchFormatToggle code={game.code} format={format} editable={canChangeFormat} />
 
             <InviteLink url={inviteUrl} full={!canJoin && game.seats.guest.claimed} />
             {canJoin && <JoinForm code={game.code} />}
@@ -356,6 +371,9 @@ function Playing({
                     name={opponentName}
                     youAccepted={accepted[seat]}
                     onAccept={acceptMatch}
+                    formatToggle={
+                      <MatchFormatToggle code={game.code} format={game.format} editable={false} />
+                    }
                   />
                 )}
               </div>
@@ -407,11 +425,13 @@ function MatchPending({
   name,
   youAccepted,
   onAccept,
+  formatToggle,
 }: {
   name: string;
   /** You are waiting on them. The other way round, the next move is yours. */
   youAccepted: boolean;
   onAccept: () => void;
+  formatToggle: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-6 text-center">
@@ -435,6 +455,7 @@ function MatchPending({
           </button>
         </>
       )}
+      {formatToggle}
     </div>
   );
 }
@@ -517,10 +538,12 @@ function Table({
   game,
   seat,
   onCancelled,
+  onFormatChanged,
 }: {
   game: Game;
   seat: Seat | null;
   onCancelled: () => void;
+  onFormatChanged: (format: MatchFormat) => void;
 }) {
   const [members, setMembers] = useState<Member[]>([]);
 
@@ -550,8 +573,11 @@ function Table({
         setMembers((current) => current.filter((m) => m.id !== member.id))
       )
       .listen('.game.cancelled', onCancelled)
+      .listen('.match.format_changed', ({ format }: { format: MatchFormat }) =>
+        onFormatChanged(format)
+      )
       .error((error: unknown) => console.error('game channel subscription failed', error));
-  }, [channel, onCancelled]);
+  }, [channel, onCancelled, onFormatChanged]);
 
   const present = (role: Role) => members.some((m) => m.role === role);
   const watching = members.filter((m) => m.role === SPECTATOR_ROLE).length;

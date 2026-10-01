@@ -6,6 +6,7 @@ use App\Enums\GameStatus;
 use App\Enums\MatchFormat;
 use App\Enums\Seat;
 use App\Enums\WinReason;
+use App\Games\Seating;
 use Closure;
 use Database\Factories\GameFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -315,13 +316,28 @@ class Game extends Model
         return count(array_filter($this->game_results, fn (array $result) => $result['winner'] === $seat->value));
     }
 
-    /**
-     * Whether the format can no longer change: once game 1's turn order is
-     * decided, which is what mounts the board.
-     */
+    /** Whether the format can no longer change: once the guest seat is taken. */
     public function formatLocked(): bool
     {
-        return $this->status === GameStatus::Finished || $this->game_number > 1 || $this->turnOrderDecided();
+        return ! $this->guestSeatOpen();
+    }
+
+    /**
+     * Change the format unless it has locked since this model was read. Returns
+     * whether the change was kept.
+     *
+     * Guarded on the same columns {@see Seating::claimGuestSeat()} is, so a
+     * change racing the guest's join cannot land after they took the seat.
+     */
+    public function changeFormat(MatchFormat $format): bool
+    {
+        if ($this->formatLocked()) {
+            return false;
+        }
+
+        return $this->fillWhere(['format' => $format], fn (Builder $query) => $query
+            ->where('status', GameStatus::Waiting)
+            ->whereNull('guest_token_hash'));
     }
 
     /**

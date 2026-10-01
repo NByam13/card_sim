@@ -24,6 +24,8 @@ Route::post('/games/{game}/join', [GameController::class, 'join'])
 
 Route::post('/games/{game}/accept', [GameController::class, 'accept'])->name('games.accept');
 
+Route::patch('/games/{game}/format', [GameController::class, 'format'])->name('games.format');
+
 Route::delete('/games/{game}', [GameController::class, 'destroy'])->name('games.destroy');
 
 // A seat's board, leaving the browser. Both derive the seat from the session.
