@@ -22,6 +22,9 @@ use App\Models\Game;
  */
 class GameChannel
 {
+    /** The presence role of someone without a seat. Mirrored in `resources/js/types/game.ts`; keep the two in step. */
+    public const SPECTATOR_ROLE = 'spectator';
+
     /**
      * The member to publish for this participant, or false to refuse them.
      *
@@ -47,7 +50,7 @@ class GameChannel
         // someone watching for the rest of the table to learn.
         return [
             'id' => $participant->id,
-            'role' => 'spectator',
+            'role' => self::SPECTATOR_ROLE,
             'name' => null,
         ];
     }

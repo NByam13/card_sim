@@ -1,3 +1,4 @@
+import { Seat } from '@/types/game';
 import { ALL_ZONES, ZoneId } from '../types';
 
 /**
@@ -34,8 +35,6 @@ export interface PublicState {
   turn: number;
   started: boolean;
 }
-
-export type Seat = 'host' | 'guest';
 
 /** The shared turn cursor, as the server broadcasts it. */
 export interface WireCursor {

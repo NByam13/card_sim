@@ -3,7 +3,8 @@
 namespace App\Enums;
 
 /**
- * One of a game's two seats. Stored and sent as its value.
+ * One of a game's two seats. Stored and sent as its value. Mirrored in
+ * `resources/js/types/game.ts`; keep the two in step.
  */
 enum Seat: string
 {

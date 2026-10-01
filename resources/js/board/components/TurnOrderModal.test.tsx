@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Seat, TurnOrder } from '../sync/types';
+import { Seat } from '@/types/game';
+import { TurnOrder } from '../sync/types';
 import TurnOrderModal, { DECIDED_HOLD_MS, ROLL_REVEAL_MS } from './TurnOrderModal';
 
 const names: Record<Seat, string> = { host: 'Twilight', guest: 'Rarity' };

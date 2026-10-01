@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PublicState, Seat, StateFrame } from './types';
+import { Seat } from '@/types/game';
+import { PublicState, StateFrame } from './types';
 import { listenForTurns, postJson, useGameSync } from './useGameSync';
 
 const request = vi.hoisted(() => vi.fn());

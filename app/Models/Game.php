@@ -335,11 +335,11 @@ class Game extends Model
             if (array_sum($host) !== array_sum($guest)) {
                 $winner = array_sum($host) > array_sum($guest) ? Seat::Host : Seat::Guest;
 
-                return ['host' => $host, 'guest' => $guest, 'winner' => $winner->value, 'rerolls' => $rerolls];
+                return [Seat::Host->value => $host, Seat::Guest->value => $guest, 'winner' => $winner->value, 'rerolls' => $rerolls];
             }
         }
 
-        return ['host' => [6, 6], 'guest' => [1, 1], 'winner' => Seat::Host->value, 'rerolls' => self::MAX_TURN_ORDER_REROLLS];
+        return [Seat::Host->value => [6, 6], Seat::Guest->value => [1, 1], 'winner' => Seat::Host->value, 'rerolls' => self::MAX_TURN_ORDER_REROLLS];
     }
 
     /**

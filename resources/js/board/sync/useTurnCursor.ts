@@ -9,7 +9,8 @@ import {
   startsTurn,
   trackTurn,
 } from '../mlp/turnTrack';
-import { Seat, TurnCursor, WireCursor } from './types';
+import { Seat } from '@/types/game';
+import { TurnCursor, WireCursor } from './types';
 import { postJson } from './useGameSync';
 
 /** A press's turn start, for the turn it opens. */
