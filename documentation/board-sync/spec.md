@@ -289,7 +289,6 @@ there is, so the mirror is a mode of the same component, never a second componen
 ## Still open
 
 - **How stale is too stale?** A seat that closes its tab leaves a mirror frozen at its last frame,
-  and presence already knows they are gone. The mirror says "away" against the seat's name, which
-  is enough to not be misleading and less than the question deserves. It belongs to the seam bar —
-  the strip between the two halves that carries game information, as PonyRec's does — and is
-  deferred to the slice that adds it.
+  and presence already knows they are gone. The seam bar says "away" against the seat's name
+  (PON-63), which is enough to not be misleading and less than the question deserves. What a match
+  does about an opponent who never comes back is still open.

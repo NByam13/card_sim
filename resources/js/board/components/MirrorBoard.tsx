@@ -40,6 +40,7 @@ export default function MirrorBoard({
   /** The shared backs, which every deck's snapshot carries identically. */
   backs: CardBacks | null;
   name: string;
+  /** Only decides the empty state. Away is marked in the seam bar. */
   present: boolean;
   /** Whether the opponent is on the play, which numbers their lanes. Null until decided. */
   goingFirst: boolean | null;
@@ -72,7 +73,6 @@ export default function MirrorBoard({
                     {HIDDEN_ZONES.map((zone) => `${LABELS[zone]} ${state.counts[zone]}`).join(
                       ' · '
                     )}
-                    {!present && ' · away'}
                   </span>
                   {/* Public, so it is shown rather than counted. */}
                   <MirrorRetire cards={state.zones.retire} scale={scale} />

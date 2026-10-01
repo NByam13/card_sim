@@ -145,6 +145,22 @@ describe('useGameSync', () => {
     expect(result.current.opponentPresent).toBe(false);
   });
 
+  it('does not call the opponent gone before presence has answered', () => {
+    const { result } = sync('host');
+
+    expect(result.current.opponentPresent).toBeNull();
+  });
+
+  it('clears the opponent being gone when they come back', () => {
+    const { result } = sync('host');
+
+    act(() => presence.bound.here?.([member('host'), member('guest')]));
+    act(() => presence.bound.leaving?.(member('guest')));
+    act(() => presence.bound.joining?.(member('guest')));
+
+    expect(result.current.opponentPresent).toBe(true);
+  });
+
   it('follows watchers arriving and leaving', () => {
     const { result } = sync('host');
 

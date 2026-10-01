@@ -59,8 +59,12 @@ export function useGameSync({
   onTurnOrderRolled: (roll: TurnOrderRoll) => void;
   /** The roll winner chose who goes first. Also heard by the seat that chose. */
   onTurnOrderDecided: (firstPlayer: Seat) => void;
-}): { opponentPresent: boolean; watching: number } {
-  const [opponentPresent, setOpponentPresent] = useState(false);
+}): {
+  /** Null until presence has answered, so a fresh page does not flash the opponent away. */
+  opponentPresent: boolean | null;
+  watching: number;
+} {
+  const [opponentPresent, setOpponentPresent] = useState<boolean | null>(null);
   const [watching, setWatching] = useState(0);
 
   // Handlers ride a ref so a new closure does not tear the subscription down.
