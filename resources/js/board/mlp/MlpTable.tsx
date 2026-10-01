@@ -1,4 +1,4 @@
-import { Dispatch, ReactNode } from 'react';
+import { Dispatch } from 'react';
 import { HandWiring } from '../components/BoardShell';
 import { BASE_WIDTH } from '../components/CardFace';
 import DeckPile from '../components/DeckPile';
@@ -49,18 +49,15 @@ export function MlpGameZone({
   scale,
   selection,
   setSelection,
-  controls,
   mirrored = false,
 }: {
   state: GameState;
   scale: number;
   selection: ReadonlySet<string>;
   setSelection: (next: ReadonlySet<string>) => void;
-  controls: ReactNode;
   /**
-   * Draw it as the opponent's half: the row order flips, so their Adventure
-   * lanes sit against the seam facing yours, the way two players face each
-   * other across a table.
+   * Draw it as the opponent's half, turned 180°: rows and columns both flip, so
+   * their Adventure lanes sit against the seam facing yours.
    *
    * A mode rather than a second component. PonyRec keeps a hand-mirrored copy of
    * this layout and it is the largest drift risk in that codebase — every change
@@ -70,6 +67,7 @@ export function MlpGameZone({
 }) {
   const z = (id: (typeof ADVENTURE_ZONES)[number] | Parameters<typeof laneNumber>[0]) =>
     state.zones[id];
+  const inOrder = <T,>(items: readonly T[]): T[] => (mirrored ? [...items].reverse() : [...items]);
 
   // Reserve room for one portrait card plus padding, so a zone holds its size
   // before and after a drop and grows in step with the card zoom.
@@ -77,6 +75,61 @@ export function MlpGameZone({
     minWidth: BASE_WIDTH * scale + 24,
     minHeight: (BASE_WIDTH * scale * 88) / 63 + 16,
   };
+
+  // The Main Character rail, level with the Scene Zone.
+  const rail = (
+    <div key="rail" className="flex flex-col justify-around">
+      <Zone
+        id="mainChar"
+        label="Main Character"
+        cards={z('mainChar')}
+        // Centre the card in a slot sized to hold one, so the rail keeps its
+        // width whether or not the Main Character is currently seated in it.
+        fill
+        style={slot}
+      />
+    </div>
+  );
+
+  // As wide as the rail, so the centre column, and the lanes in it, sit in the
+  // same place on both halves of the table.
+  const counterweight = <div key="counterweight" aria-hidden style={{ minWidth: slot.minWidth }} />;
+
+  const reveal = (
+    <div key="reveal" className={`flex min-w-0 ${mirrored ? 'justify-end' : 'justify-start'}`}>
+      <Zone
+        id="reveal"
+        // Short on purpose: the longer "Reveal Zone" wraps inside the
+        // zone's own header at low zoom.
+        label="Reveal"
+        cards={z('reveal')}
+        count={z('reveal').length}
+        // Dashed and set well off the lanes so it never reads as a fourth
+        // Adventure lane.
+        className={`${mirrored ? 'mr-6' : 'ml-6'} max-w-full border-dashed`}
+        style={slot}
+      />
+    </div>
+  );
+
+  const lanes = (
+    <div key="lanes" className="flex justify-center gap-3">
+      {inOrder(ADVENTURE_ZONES).map((aid) => (
+        <Zone
+          key={aid}
+          id={aid}
+          // Numbered by contact order, which reverses when you are on the
+          // draw (the rightmost lane becomes Lane 1).
+          label={`Lane ${laneNumber(aid, state.goingFirst)}`}
+          cards={z(aid)}
+          // A character and the item adorned onto it share a lane — overlap
+          // them so the item peeks out from behind the character.
+          overlap
+          style={slot}
+        />
+      ))}
+    </div>
+  );
 
   return (
     // Bordered and raised to set the table apart from the out-of-play bar. Grows
@@ -91,65 +144,24 @@ export function MlpGameZone({
         <SelectionChip count={selection.size} onClear={() => setSelection(EMPTY_SELECTION)} />
       )}
 
-      {/* Left rail — the Main Character waits here, level with the Scene Zone. */}
-      <div className="flex flex-col justify-around">
-        <Zone
-          id="mainChar"
-          label="Main Character"
-          cards={z('mainChar')}
-          // Centre the card in a slot sized to hold one, so the rail keeps its
-          // width whether or not the Main Character is currently seated in it.
-          fill
-          style={slot}
-        />
-      </div>
+      {mirrored ? counterweight : rail}
 
       {/* Centre: Adventure lanes → Story stages → Scene Zone, reversed in a mirror. */}
-      <div
-        className={`flex justify-between space-y-3 ${mirrored ? 'flex-col-reverse' : 'flex-col'}`}
-      >
+      <div className={`flex justify-between gap-3 ${mirrored ? 'flex-col-reverse' : 'flex-col'}`}>
         {/*
-          Lanes stay centred in the column so they will line up with the
-          opponent's across the seam. The Reveal Zone lives in the right-hand
-          gutter — the equal 1fr cells keep the lanes centred no matter how much
-          it holds, and it costs the board no extra height.
+          Lanes stay centred in the column so they line up with the opponent's
+          across the seam. The Reveal Zone lives in a gutter beside them — the
+          equal 1fr cells keep the lanes centred no matter how much it holds,
+          and it costs the board no extra height.
         */}
         <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
-          <div aria-hidden />
-          <div className="flex justify-center gap-3">
-            {ADVENTURE_ZONES.map((aid) => (
-              <Zone
-                key={aid}
-                id={aid}
-                // Numbered by contact order, which reverses when you are on the
-                // draw (the rightmost lane becomes Lane 1).
-                label={`Lane ${laneNumber(aid, state.goingFirst)}`}
-                cards={z(aid)}
-                // A character and the item adorned onto it share a lane — overlap
-                // them so the item peeks out from behind the character.
-                overlap
-                style={slot}
-              />
-            ))}
-          </div>
-          <div className="flex min-w-0 justify-start">
-            <Zone
-              id="reveal"
-              // Short on purpose: the longer "Reveal Zone" wraps inside the
-              // zone's own header at low zoom.
-              label="Reveal"
-              cards={z('reveal')}
-              count={z('reveal').length}
-              // Dashed and set well off the lanes so it never reads as a fourth
-              // Adventure lane.
-              className="ml-6 max-w-full border-dashed"
-              style={slot}
-            />
-          </div>
+          {mirrored
+            ? [reveal, lanes, <div key="gutter" aria-hidden />]
+            : [<div key="gutter" aria-hidden />, lanes, reveal]}
         </div>
 
         <div className="grid grid-cols-4 gap-2">
-          {STORY_ZONES.map((sid, i) => (
+          {inOrder(STORY_ZONES.map((sid, i) => [sid, i] as const)).map(([sid, i]) => (
             // A stage stacks a landscape Story card (bottom) and a 50%-overlapping
             // Plan (top half), 1.45 card-widths tall, with the portrait Main
             // Character standing on top once it advances onto the stage.
@@ -190,14 +202,7 @@ export function MlpGameZone({
         />
       </div>
 
-      {/*
-        Right rail: controls. Opted out of the marquee, since dragging from a gap
-        between two buttons is a slip rather than an attempt to select the board
-        behind them. Opted back into text selection, so a log can be copied.
-      */}
-      <div data-no-marquee className="flex flex-col items-center space-y-2 select-text">
-        {controls}
-      </div>
+      {mirrored ? rail : counterweight}
     </div>
   );
 }

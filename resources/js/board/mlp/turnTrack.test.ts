@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { TurnCursor } from '../sync/types';
 import {
+  advanceLabel,
   CursorMove,
+  displayStops,
   FIRST_CONTACT_TURN,
   next,
   previous,
@@ -115,5 +117,61 @@ describe('startsTurn', () => {
     expect(startsTurn(cursor(), { turn_stop: 'main' })).toBe(true);
     expect(startsTurn(cursor({ turn_stop: 'main' }), { turn_stop: 'contact:1' })).toBe(false);
     expect(startsTurn(cursor({ turn_stop: 'end' }), { ends_turn: true })).toBe(false);
+  });
+});
+
+describe('advanceLabel', () => {
+  it('names what each press on turn 3 does', () => {
+    const stops = [null, 'main', 'contact:1', 'contact:2', 'contact:3', 'end'];
+
+    expect(stops.map((turn_stop) => advanceLabel(cursor({ turn_stop })))).toEqual([
+      'Start turn',
+      'Contact',
+      'Lane 2',
+      'Lane 3',
+      'End phase',
+      'End turn',
+    ]);
+  });
+
+  it('goes from main straight to the end phase before contact is legal', () => {
+    expect(advanceLabel(cursor({ turn_number: 1, turn_stop: 'main' }))).toBe('End phase');
+  });
+
+  it('opens the game from turn 0', () => {
+    expect(advanceLabel(cursor({ turn_number: 0, active_seat: null }))).toBe('Start turn');
+  });
+
+  it('has nothing to say when it is not your turn', () => {
+    expect(advanceLabel(cursor({ turn_stop: 'main', my_turn: false }))).toBeNull();
+  });
+});
+
+describe('displayStops', () => {
+  const keys = (turnNumber: number, turnStop: string | null) =>
+    displayStops(turnNumber, turnStop).map((stop) => stop.key);
+
+  it('folds contact into one stop outside it', () => {
+    expect(keys(3, 'main')).toEqual(['start', 'main', 'contact', 'end']);
+  });
+
+  it('opens contact into its lanes while the cursor is in one', () => {
+    expect(keys(3, 'contact:2')).toEqual([
+      'start',
+      'main',
+      'contact:1',
+      'contact:2',
+      'contact:3',
+      'end',
+    ]);
+  });
+
+  it('draws contact locked before it is legal', () => {
+    const contact = displayStops(FIRST_CONTACT_TURN - 1, 'main').find((s) => s.key === 'contact');
+
+    expect(contact?.locked).toBe(true);
+    expect(displayStops(FIRST_CONTACT_TURN, 'main').find((s) => s.key === 'contact')?.locked).toBe(
+      false
+    );
   });
 });

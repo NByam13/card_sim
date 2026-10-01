@@ -43,7 +43,11 @@ export function useTurnCursor({
     setCursor(next);
   }, []);
 
-  useEffect(() => apply(served), [apply, served]);
+  // A reload answered before a broadcast it arrives after is older than the cursor already held.
+  useEffect(() => {
+    if (served.turn_number < latest.current.turn_number) return;
+    apply(served);
+  }, [apply, served]);
 
   // The mover hears its own `.turn.advanced` too, and that echo can land after the response.
   const receive = useCallback(

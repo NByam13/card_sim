@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PublicState, Seat, StateFrame } from './types';
-import { postJson, useGameSync } from './useGameSync';
+import { listenForTurns, postJson, useGameSync } from './useGameSync';
 
 const request = vi.hoisted(() => vi.fn());
 
@@ -74,6 +74,8 @@ function sync(seat: Seat = 'host') {
   const onSeatClaimed = vi.fn();
   const onAccepted = vi.fn();
   const onTurnAdvanced = vi.fn();
+  const onTurnOrderRolled = vi.fn();
+  const onTurnOrderDecided = vi.fn();
   const view = renderHook(() =>
     useGameSync({
       code: 'abc123',
@@ -83,10 +85,21 @@ function sync(seat: Seat = 'host') {
       onSeatClaimed,
       onAccepted,
       onTurnAdvanced,
+      onTurnOrderRolled,
+      onTurnOrderDecided,
     })
   );
 
-  return { ...view, onFrame, onAnnounce, onSeatClaimed, onAccepted, onTurnAdvanced };
+  return {
+    ...view,
+    onFrame,
+    onAnnounce,
+    onSeatClaimed,
+    onAccepted,
+    onTurnAdvanced,
+    onTurnOrderRolled,
+    onTurnOrderDecided,
+  };
 }
 
 beforeEach(() => {
@@ -192,6 +205,17 @@ describe('useGameSync', () => {
     expect(onTurnAdvanced).toHaveBeenCalledWith(cursor);
   });
 
+  it('hands over the roll and the election, including its own', () => {
+    const { onTurnOrderRolled, onTurnOrderDecided } = sync('host');
+    const roll = { host: [6, 5], guest: [2, 1], winner: 'host', rerolls: 0 };
+
+    act(() => presence.bound.events['.turn_order.rolled']?.({ roll }));
+    act(() => presence.bound.events['.turn_order.decided']?.({ first_player: 'guest' }));
+
+    expect(onTurnOrderRolled).toHaveBeenCalledWith(roll);
+    expect(onTurnOrderDecided).toHaveBeenCalledWith('guest');
+  });
+
   /**
    * Reverb cannot say who sent a client event and accepts them from connections
    * that never subscribed. Not listening is what makes an injected one inert.
@@ -205,6 +229,8 @@ describe('useGameSync', () => {
       '.seat.claimed',
       '.match.accepted',
       '.turn.advanced',
+      '.turn_order.rolled',
+      '.turn_order.decided',
     ]);
   });
 
@@ -241,5 +267,26 @@ describe('postJson', () => {
     request.mockResolvedValueOnce({ data: '' });
 
     await expect(postJson('/x', {})).resolves.toBeUndefined();
+  });
+});
+
+describe('listenForTurns', () => {
+  it('unwraps each turn event for its listener', () => {
+    const listeners = {
+      onTurnAdvanced: vi.fn(),
+      onTurnOrderRolled: vi.fn(),
+      onTurnOrderDecided: vi.fn(),
+    };
+    const cursor = { turn_number: 2, active_seat: 'guest', turn_stop: null };
+    const roll = { host: [6, 5], guest: [2, 1], winner: 'host', rerolls: 0 };
+
+    listenForTurns(presence, listeners);
+    presence.bound.events['.turn.advanced']?.({ cursor });
+    presence.bound.events['.turn_order.rolled']?.({ roll });
+    presence.bound.events['.turn_order.decided']?.({ first_player: 'guest' });
+
+    expect(listeners.onTurnAdvanced).toHaveBeenCalledWith(cursor);
+    expect(listeners.onTurnOrderRolled).toHaveBeenCalledWith(roll);
+    expect(listeners.onTurnOrderDecided).toHaveBeenCalledWith('guest');
   });
 });

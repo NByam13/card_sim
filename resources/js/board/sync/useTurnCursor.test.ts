@@ -150,4 +150,27 @@ describe('useTurnCursor', () => {
 
     expect(result.current.cursor.turn_stop).toBe('end');
   });
+
+  it('ignores a reloaded cursor from a turn the channel has already moved past', () => {
+    const { result, rerender } = mount(
+      served({ turn_number: 0, active_seat: null, my_turn: false })
+    );
+
+    act(() => result.current.receive({ turn_number: 1, active_seat: 'guest', turn_stop: 'main' }));
+    rerender({ cursor: served({ turn_number: 0, active_seat: null, my_turn: false }) });
+
+    expect(result.current.cursor).toEqual(
+      served({ turn_number: 1, active_seat: 'guest', turn_stop: 'main', my_turn: false })
+    );
+  });
+
+  it('takes a reloaded cursor from the same turn or a later one', () => {
+    const { result, rerender } = mount(served({ turn_stop: 'main' }));
+
+    rerender({ cursor: served({ turn_number: 4, active_seat: 'guest', my_turn: false }) });
+
+    expect(result.current.cursor).toEqual(
+      served({ turn_number: 4, active_seat: 'guest', my_turn: false })
+    );
+  });
 });

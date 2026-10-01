@@ -26,7 +26,7 @@ export function stopsForTurn(turnNumber: number): TurnStop[] {
 }
 
 /** A cursor on turn 0 has not opened the game yet; its first move opens turn 1. */
-function trackTurn(cursor: TurnCursor): number {
+export function trackTurn(cursor: TurnCursor): number {
   return Math.max(cursor.turn_number, 1);
 }
 
@@ -68,4 +68,54 @@ export function previous(cursor: TurnCursor): CursorMove | null {
 /** Whether this move starts the turn, which is when the local board untaps and draws. */
 export function startsTurn(cursor: TurnCursor, move: CursorMove): boolean {
   return cursor.turn_stop === null && 'turn_stop' in move;
+}
+
+/** A stop's name on the seam bar. */
+export function stopLabel(stop: TurnStop): string {
+  if (stop === 'main') return 'Main';
+  if (stop === 'end') return 'End';
+
+  return `Lane ${stop.slice('contact:'.length)}`;
+}
+
+/** What one press does, for the button that makes it. Null when it is not your turn. */
+export function advanceLabel(cursor: TurnCursor): string | null {
+  const move = next(cursor);
+  if (!move) return null;
+  if ('ends_turn' in move) return 'End turn';
+  if (startsTurn(cursor, move)) return 'Start turn';
+  if (move.turn_stop === 'contact:1') return 'Contact';
+  if (move.turn_stop === 'end') return 'End phase';
+
+  return stopLabel(move.turn_stop);
+}
+
+/** A stop as the seam bar draws it. `locked` stops are drawn but never reached by a press. */
+export interface DisplayStop {
+  key: 'start' | 'contact' | TurnStop;
+  label: string;
+  locked: boolean;
+}
+
+/**
+ * The strip the seam bar draws: `Start › Main › Contact › End`, where Contact
+ * opens into its lanes while the cursor is in one. Contact is drawn locked on
+ * the turns before it is legal, so the strip keeps its width.
+ */
+export function displayStops(turnNumber: number, turnStop: string | null): DisplayStop[] {
+  const inContact = turnStop?.startsWith('contact:') ?? false;
+  const contact: DisplayStop[] = inContact
+    ? (['contact:1', 'contact:2', 'contact:3'] as const).map((key) => ({
+        key,
+        label: stopLabel(key),
+        locked: false,
+      }))
+    : [{ key: 'contact', label: 'Contact', locked: turnNumber < FIRST_CONTACT_TURN }];
+
+  return [
+    { key: 'start', label: 'Start', locked: true },
+    { key: 'main', label: stopLabel('main'), locked: false },
+    ...contact,
+    { key: 'end', label: stopLabel('end'), locked: false },
+  ];
 }

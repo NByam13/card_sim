@@ -369,6 +369,19 @@ class Game extends Model
         return $this->fillIfNull('first_player', $firstPlayer);
     }
 
+    /**
+     * Turn order as it stands, for everyone at the table.
+     *
+     * @return array{roll: array{host: array<int, int>, guest: array<int, int>, winner: 'host'|'guest', rerolls: int}|null, first_player: string|null}
+     */
+    public function turnOrder(): array
+    {
+        return [
+            'roll' => $this->turn_order_roll,
+            'first_player' => $this->first_player?->value,
+        ];
+    }
+
     /** Write a column only while it is still null. */
     private function fillIfNull(string $column, mixed $value): bool
     {

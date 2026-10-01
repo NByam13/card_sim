@@ -50,6 +50,20 @@ export interface TurnCursor extends WireCursor {
   my_turn: boolean;
 }
 
+/** The dice for turn order. Ties are rerolled, so the two totals always differ. */
+export interface TurnOrderRoll {
+  host: number[];
+  guest: number[];
+  winner: Seat;
+  rerolls: number;
+}
+
+/** Turn order as it stands: no roll, a roll awaiting the winner's choice, or decided. */
+export interface TurnOrder {
+  roll: TurnOrderRoll | null;
+  first_player: Seat | null;
+}
+
 export interface StateFrame {
   /** Changes when the sender's board remounts, which restarts `seq`. */
   session: string;

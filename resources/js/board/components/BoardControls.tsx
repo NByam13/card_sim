@@ -19,6 +19,8 @@ export interface BoardControlsProps {
    */
   onGoingFirstChange?: (value: boolean) => void;
   onStartGame: () => void;
+  /** False while a match is still deciding turn order. */
+  canStart: boolean;
   /** Whether the one mulligan (rules 103.4.1c) has already been spent. */
   mulliganed: boolean;
   onMulligan: () => void;
@@ -27,27 +29,33 @@ export interface BoardControlsProps {
   onShuffleLibrary: () => void;
   onDraw: () => void;
   onNextTurn: () => void;
+  /** What the next press does, or why it does nothing. */
+  nextTurnLabel: string;
+  /** False in a match when it is not your turn. */
+  canAdvance: boolean;
 }
 
 /**
  * The right-rail action column. Start Game and Mulligan show only before the
  * game begins.
  *
- * Ported from PonyRec's `PlaytestControls.tsx`, less the phase button: that
- * walks the shared turn cursor, which arrives with the turn-order slice. Until
- * then Next Turn is the only thing in that slot.
+ * Ported from PonyRec's `PlaytestControls.tsx`. In a match the last button
+ * walks the shared turn cursor and is labelled with the stop it moves to.
  */
 export default function BoardControls({
   started,
   goingFirst,
   onGoingFirstChange,
   onStartGame,
+  canStart,
   mulliganed,
   onMulligan,
   onRestart,
   onShuffleLibrary,
   onDraw,
   onNextTurn,
+  nextTurnLabel,
+  canAdvance,
 }: BoardControlsProps) {
   return (
     <div className="flex w-32 flex-col gap-1.5">
@@ -75,8 +83,12 @@ export default function BoardControls({
               ))}
             </div>
           )}
-          <button onClick={onStartGame} className={PRIMARY_BTN}>
-            Start Game
+          <button
+            onClick={onStartGame}
+            disabled={!canStart}
+            className={canStart ? PRIMARY_BTN : RAIL_BTN_INERT}
+          >
+            {canStart ? 'Start Game' : 'Deciding turn order'}
           </button>
           <button
             onClick={onMulligan}
@@ -98,8 +110,12 @@ export default function BoardControls({
       <button onClick={onDraw} className={RAIL_BTN}>
         Draw
       </button>
-      <button onClick={onNextTurn} className={PRIMARY_BTN}>
-        Next Turn
+      <button
+        onClick={onNextTurn}
+        disabled={!canAdvance}
+        className={canAdvance ? PRIMARY_BTN : RAIL_BTN_INERT}
+      >
+        {nextTurnLabel}
       </button>
     </div>
   );

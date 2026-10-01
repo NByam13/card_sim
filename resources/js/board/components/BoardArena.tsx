@@ -3,6 +3,8 @@ import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { BoardCardViewProvider, BoardFocusProvider, BoardTokensProvider } from '../context';
 import { useHoverFollowsPointer } from '../hoverTarget';
 import { MlpGameZone, MlpOutOfPlayBar } from '../mlp/MlpTable';
+import { advanceLabel } from '../mlp/turnTrack';
+import { TurnCursor } from '../sync/types';
 import {
   EMPTY_SELECTION,
   pruneSelection,
@@ -59,7 +61,10 @@ export default function BoardArena({
   onState,
   canRestart = true,
   header,
+  seam,
   turnCursor,
+  goingFirst,
+  opponentStarted,
 }: {
   deck: Deck;
   /** Card zoom factor (the board itself stays at 1×; only cards scale). */
@@ -81,14 +86,27 @@ export default function BoardArena({
    */
   header?: ReactNode;
   /**
+   * The seam bar, below `header`. Handed the same advance as the rail's turn
+   * button, or what it is waiting on instead.
+   */
+  seam?: (turn: { onAdvance?: () => void; waiting?: string }) => ReactNode;
+  /**
    * The shared turn cursor in a live match. Absent in solo, where the next turn
    * is local alone.
    */
   turnCursor?: {
+    cursor: TurnCursor;
     /** Runs `onTurnStart` once the press that starts the turn is accepted. */
     advance: (onTurnStart: () => void) => void;
     stepBack: () => void;
   };
+  /**
+   * Whether this seat is on the play, as a match's turn order settled it: null
+   * until it is. Undefined in solo, where the board's own toggle decides.
+   */
+  goingFirst?: boolean | null;
+  /** Whether the opponent has pressed Start Game. Turn 1 waits for both boards. */
+  opponentStarted?: boolean;
 }) {
   const { state, dispatch } = useGame(deck, savedState);
   const { message, show, toast } = useToast();
@@ -151,6 +169,10 @@ export default function BoardArena({
     return () => window.removeEventListener('keydown', onKey);
   }, [selection, viewer, showShortcuts, viewing, clearSelection]);
 
+  useEffect(() => {
+    if (goingFirst !== undefined) dispatch({ type: 'SET_GOING_FIRST', goingFirst });
+  }, [goingFirst, dispatch]);
+
   // The callback rides a ref so the effect fires on state changes only — a
   // parent re-render with a fresh closure must not re-announce an unchanged
   // state.
@@ -192,7 +214,23 @@ export default function BoardArena({
   // The turn start runs after a round trip, so it must read the board as it is then.
   const nextTurnRef = useRef(nextTurn);
   nextTurnRef.current = nextTurn;
-  const advanceTurn = turnCursor ? () => turnCursor.advance(() => nextTurnRef.current()) : nextTurn;
+  const opening = turnCursor?.cursor.turn_number === 0;
+  const waitingOn = !turnCursor
+    ? null
+    : goingFirst === null
+      ? 'Deciding turn order'
+      : opening && !state.started
+        ? 'Start Game first'
+        : opening && !opponentStarted
+          ? 'Waiting for opponent'
+          : null;
+  const matchAdvance = turnCursor && !waitingOn ? advanceLabel(turnCursor.cursor) : null;
+  const nextTurnLabel = !turnCursor ? 'Next Turn' : (waitingOn ?? matchAdvance ?? 'Not your turn');
+  const advanceTurn = !turnCursor
+    ? nextTurn
+    : () => {
+        if (!waitingOn) turnCursor.advance(() => nextTurnRef.current());
+      };
 
   const revealScene = () => {
     if (state.zones.sceneDeck.length === 0) {
@@ -279,14 +317,21 @@ export default function BoardArena({
       <BoardControls
         started={state.started}
         goingFirst={state.goingFirst}
-        onGoingFirstChange={(value) => dispatch({ type: 'SET_GOING_FIRST', goingFirst: value })}
+        onGoingFirstChange={
+          goingFirst === undefined
+            ? (value) => dispatch({ type: 'SET_GOING_FIRST', goingFirst: value })
+            : undefined
+        }
         onStartGame={() => dispatch({ type: 'START_GAME' })}
+        canStart={goingFirst !== null}
         mulliganed={state.mulliganed}
         onMulligan={() => dispatch({ type: 'MULLIGAN' })}
         onRestart={canRestart ? () => dispatch({ type: 'RESTART' }) : null}
         onShuffleLibrary={() => dispatch({ type: 'SHUFFLE_LIBRARY' })}
         onDraw={draw}
         onNextTurn={advanceTurn}
+        nextTurnLabel={nextTurnLabel}
+        canAdvance={!turnCursor || matchAdvance !== null}
       />
       <Randomizers onResult={toast} />
       <ShortcutsButton onClick={toggleShortcuts} />
@@ -307,6 +352,7 @@ export default function BoardArena({
             header={
               <>
                 {header}
+                {seam?.(waitingOn ? { waiting: waitingOn } : { onAdvance: advanceTurn })}
                 {issues.length > 0 && !noticeDismissed && (
                   <div className="mb-3 flex items-start justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
                     <span>Incomplete deck — playing what&rsquo;s here ({issues.join(', ')}).</span>
@@ -320,13 +366,13 @@ export default function BoardArena({
                 )}
               </>
             }
+            rail={controls}
             gameZone={
               <MlpGameZone
                 state={state}
                 scale={scale}
                 selection={selection}
                 setSelection={setSelection}
-                controls={controls}
               />
             }
             outOfPlayBar={(hand) => (

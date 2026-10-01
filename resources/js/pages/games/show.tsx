@@ -2,12 +2,14 @@ import { accept, destroy } from '@/actions/App/Http/Controllers/GameController';
 import BoardArena from '@/board/components/BoardArena';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
+import SeamBar from '@/board/components/SeamBar';
 import { CompactGameState, expandState } from '@/board/sync/persist';
-import { PublicState, TurnCursor } from '@/board/sync/types';
+import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
 import { useBoardRelay } from '@/board/sync/useBoardRelay';
 import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
 import { useMirror } from '@/board/sync/useMirror';
 import { useTurnCursor } from '@/board/sync/useTurnCursor';
+import { useTurnOrder } from '@/board/sync/useTurnOrder';
 import ZoomControls from '@/board/components/ZoomControls';
 import { GameState } from '@/board/types';
 import { usePersistentZoom } from '@/board/zoom';
@@ -51,6 +53,7 @@ interface Props {
   game: Game;
   seat: Seat | null;
   cursor: TurnCursor;
+  turnOrder: TurnOrder;
   inviteUrl: string;
   canJoin: boolean;
   canCancel: boolean;
@@ -68,7 +71,15 @@ interface Props {
  * A watcher stays on the lobby regardless — they get a board of their own to
  * mirror in the slice after this one.
  */
-export default function Show({ game, seat, cursor, inviteUrl, canJoin, canCancel }: Props) {
+export default function Show({
+  game,
+  seat,
+  cursor,
+  turnOrder,
+  inviteUrl,
+  canJoin,
+  canCancel,
+}: Props) {
   const [cancelled, setCancelled] = useState(false);
   const [solo, setSolo] = useState(false);
 
@@ -87,6 +98,7 @@ export default function Show({ game, seat, cursor, inviteUrl, canJoin, canCancel
         game={game}
         seat={seat}
         cursor={cursor}
+        turnOrder={turnOrder}
         deck={game.deck}
         onWaitingRoom={seated ? null : () => setSolo(false)}
       />
@@ -176,12 +188,14 @@ function Playing({
   game,
   seat,
   cursor,
+  turnOrder: servedTurnOrder,
   deck,
   onWaitingRoom,
 }: {
   game: Game;
   seat: Seat;
   cursor: TurnCursor;
+  turnOrder: TurnOrder;
   deck: Deck;
   /** Back to the lobby, or null once the second seat is taken and there is no lobby left to want. */
   onWaitingRoom: (() => void) | null;
@@ -212,12 +226,16 @@ function Playing({
   });
   const { mirror, receive } = useMirror(lookupCard, game.opponent_state);
   const turn = useTurnCursor({ code: game.code, seat, cursor });
+  const order = useTurnOrder({ code: game.code, turnOrder: servedTurnOrder });
+  const firstPlayer = order.turnOrder.first_player;
   const { opponentPresent } = useGameSync({
     code: game.code,
     seat,
     onFrame: receive,
     onAnnounce: announce,
     onTurnAdvanced: turn.receive,
+    onTurnOrderRolled: order.receiveRoll,
+    onTurnOrderDecided: order.receiveDecided,
     // Presence cannot tell a watcher from the player who just sat down, and the
     // props this page is holding predate the claim either way.
     onSeatClaimed: useCallback(() => router.reload({ only: ['game'] }), []),
@@ -247,7 +265,7 @@ function Playing({
   const arenaKey = matchLive ? 'match' : 'solo';
   const savedState = matchLive && !liveOnMount ? null : restored;
 
-  const opponentName = game.seats[opponent].name ?? (opponent === 'host' ? 'Host' : 'Guest');
+  const opponentName = seatNames(game)[opponent];
   // A full visit rather than a bare POST: the board deals fresh from props that
   // no longer carry a saved state, which is what accepting means.
   const acceptMatch = useCallback(() => router.post(accept.url(game.code)), [game.code]);
@@ -288,6 +306,26 @@ function Playing({
           // affordance only.
           canRestart={!matchLive}
           turnCursor={matchLive ? turn : undefined}
+          goingFirst={matchLive ? (firstPlayer ? firstPlayer === seat : null) : undefined}
+          opponentStarted={mirror?.started ?? false}
+          seam={
+            matchLive
+              ? ({ onAdvance, waiting }) => (
+                  <div className="mb-3">
+                    <SeamBar
+                      seat={seat}
+                      names={seatNames(game)}
+                      cursor={turn.cursor}
+                      turnOrder={order.turnOrder}
+                      onRoll={order.roll}
+                      onElect={order.elect}
+                      onAdvance={onAdvance}
+                      waiting={waiting}
+                    />
+                  </div>
+                )
+              : undefined
+          }
           header={
             seated ? (
               <div className="mb-3">
@@ -299,6 +337,7 @@ function Playing({
                     backs={deck.card_backs ?? null}
                     name={opponentName}
                     present={opponentPresent}
+                    goingFirst={firstPlayer ? firstPlayer !== seat : null}
                   />
                 ) : (
                   <MatchPending
@@ -324,6 +363,13 @@ function Playing({
       )}
     </>
   );
+}
+
+function seatNames(game: Game): Record<Seat, string> {
+  return {
+    host: game.seats.host.name ?? 'Host',
+    guest: game.seats.guest.name ?? 'Guest',
+  };
 }
 
 /**
