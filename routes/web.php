@@ -38,6 +38,7 @@ Route::post('/games/{game}/turn-order/elect', [TurnOrderController::class, 'elec
 Route::post('/games/{game}/cursor', [TurnCursorController::class, 'advance'])->name('games.cursor');
 
 Route::post('/games/{game}/claim-win', [GameResultController::class, 'claim'])->name('games.claim-win');
+Route::post('/games/{game}/concede', [GameResultController::class, 'concede'])->name('games.concede');
 
 // Cards a mirror meets that its own deck does not carry. `where` so a number
 // containing a dot still routes. Throttled because the number space is open and

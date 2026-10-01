@@ -4,8 +4,10 @@ namespace Tests\Feature\Games;
 
 use App\Enums\GameStatus;
 use App\Enums\Seat;
+use App\Events\GameFinished;
 use App\Models\Game;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
@@ -42,6 +44,20 @@ class ClaimWinTest extends TestCase
         $game->refresh();
         $this->assertSame(GameStatus::Finished, $game->status);
         $this->assertSame(Seat::Host, $game->winner_seat);
+    }
+
+    public function test_the_opponent_hears_the_claim(): void
+    {
+        Event::fake([GameFinished::class]);
+        $game = $this->live();
+
+        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win")->assertOk();
+
+        Event::assertDispatched(GameFinished::class, fn (GameFinished $event) => $event->broadcastWith() === [
+            'status' => 'finished',
+            'game_results' => [['game' => 1, 'winner' => 'host', 'reason' => 'story']],
+            'winner_seat' => 'host',
+        ]);
     }
 
     public function test_the_guest_claims_the_game_for_the_guest(): void

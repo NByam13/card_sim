@@ -1,6 +1,6 @@
 import { claim as claimRoute } from '@/actions/App/Http/Controllers/GameResultController';
 import { router } from '@inertiajs/react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { mainCharacterOnFinalStage } from '../mlp/victory';
 import { GameState } from '../types';
 import { postJson } from './useGameSync';
@@ -42,6 +42,10 @@ export function useWinClaim({
   // Read by `watch`, so an arrival while disabled is not held over to pop up once enabled.
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
+  // Otherwise a prompt the game ended under would reopen once the next game is undecided.
+  useEffect(() => {
+    if (!enabled) setPrompting(false);
+  }, [enabled]);
 
   const watch = useCallback((state: GameState) => {
     const now = mainCharacterOnFinalStage(state);

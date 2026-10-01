@@ -77,6 +77,7 @@ function sync(seat: Seat = 'host') {
   const onTurnAdvanced = vi.fn();
   const onTurnOrderRolled = vi.fn();
   const onTurnOrderDecided = vi.fn();
+  const onGameFinished = vi.fn();
   const view = renderHook(() =>
     useGameSync({
       code: 'abc123',
@@ -88,6 +89,7 @@ function sync(seat: Seat = 'host') {
       onTurnAdvanced,
       onTurnOrderRolled,
       onTurnOrderDecided,
+      onGameFinished,
     })
   );
 
@@ -100,6 +102,7 @@ function sync(seat: Seat = 'host') {
     onTurnAdvanced,
     onTurnOrderRolled,
     onTurnOrderDecided,
+    onGameFinished,
   };
 }
 
@@ -245,6 +248,7 @@ describe('useGameSync', () => {
       '.board.state',
       '.seat.claimed',
       '.match.accepted',
+      '.game.finished',
       '.turn.advanced',
       '.turn_order.rolled',
       '.turn_order.decided',
@@ -270,6 +274,19 @@ describe('useGameSync', () => {
     );
 
     expect(onAccepted).toHaveBeenCalledWith({ host: false, guest: true });
+  });
+
+  it('passes a recorded game on whole', () => {
+    const { onGameFinished } = sync('host');
+    const result = {
+      status: 'active',
+      game_results: [{ game: 1, winner: 'host', reason: 'concede' }],
+      winner_seat: null,
+    };
+
+    act(() => presence.bound.events['.game.finished']?.(result));
+
+    expect(onGameFinished).toHaveBeenCalledWith(result);
   });
 });
 
