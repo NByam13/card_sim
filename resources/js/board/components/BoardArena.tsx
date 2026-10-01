@@ -111,7 +111,7 @@ export default function BoardArena({
   /** The turn cursor drawn on this half. Absent in solo. */
   rings?: TableRings;
 }) {
-  const { state, dispatch } = useGame(deck, savedState);
+  const { state, dispatch } = useGame(deck, savedState, goingFirst !== null);
   const { message, show, toast } = useToast();
   const [viewer, setViewer] = useState<Extract<ZoneId, 'library' | 'retire' | 'sceneDeck'> | null>(
     null
@@ -173,7 +173,10 @@ export default function BoardArena({
   }, [selection, viewer, showShortcuts, viewing, clearSelection]);
 
   useEffect(() => {
-    if (goingFirst !== undefined) dispatch({ type: 'SET_GOING_FIRST', goingFirst });
+    if (goingFirst === undefined) return;
+
+    dispatch({ type: 'SET_GOING_FIRST', goingFirst });
+    if (goingFirst !== null) dispatch({ type: 'DRAW_OPENING_HAND' });
   }, [goingFirst, dispatch]);
 
   // The callback rides a ref so the effect fires on state changes only — a
@@ -326,7 +329,7 @@ export default function BoardArena({
             : undefined
         }
         onStartGame={() => dispatch({ type: 'START_GAME' })}
-        canStart={goingFirst !== null}
+        canStart={goingFirst !== null && state.handDrawn}
         mulliganed={state.mulliganed}
         onMulligan={() => dispatch({ type: 'MULLIGAN' })}
         onRestart={canRestart ? () => dispatch({ type: 'RESTART' }) : null}

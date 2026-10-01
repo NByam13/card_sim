@@ -51,6 +51,7 @@ function gameState(
     started: false,
     goingFirst: null,
     mulliganed: false,
+    handDrawn: true,
     ...extra,
   };
 }

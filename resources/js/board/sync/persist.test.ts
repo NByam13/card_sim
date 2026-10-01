@@ -50,6 +50,7 @@ function gameState(
     started: false,
     goingFirst: null,
     mulliganed: false,
+    handDrawn: true,
     ...extra,
   };
 }
@@ -129,6 +130,20 @@ describe('compactState / expandState', () => {
     const state = gameState({ hand: [inst()] }, { mulliganed: true });
 
     expect(expandState(compactState(state), deckFor(state))?.mulliganed).toBe(true);
+  });
+
+  it('carries a held-back opening hand across a save and restore', () => {
+    const state = gameState({}, { handDrawn: false });
+
+    expect(expandState(compactState(state), deckFor(state))?.handDrawn).toBe(false);
+  });
+
+  it('restores a board saved without the opening-hand flag as drawn', () => {
+    const state = gameState({ hand: [inst()] });
+    const compact = compactState(state);
+    delete compact.handDrawn;
+
+    expect(expandState(compact, deckFor(state))?.handDrawn).toBe(true);
   });
 
   it('restores a board saved without the mulligan flag as unspent', () => {

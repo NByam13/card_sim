@@ -26,6 +26,7 @@ export interface CompactGameState {
   started: boolean;
   goingFirst?: boolean | null;
   mulliganed?: boolean;
+  handDrawn?: boolean;
 }
 
 export function compactState(state: GameState): CompactGameState {
@@ -48,6 +49,7 @@ export function compactState(state: GameState): CompactGameState {
     started: state.started,
     goingFirst: state.goingFirst,
     mulliganed: state.mulliganed,
+    handDrawn: state.handDrawn,
   };
 }
 
@@ -97,5 +99,6 @@ export function expandState(compact: CompactGameState, deck: Deck): GameState | 
     started: compact.started,
     goingFirst: compact.goingFirst ?? null,
     mulliganed: compact.mulliganed ?? false,
+    handDrawn: compact.handDrawn ?? true,
   };
 }

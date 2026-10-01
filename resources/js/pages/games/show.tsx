@@ -3,6 +3,7 @@ import BoardArena from '@/board/components/BoardArena';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
 import SeamBar from '@/board/components/SeamBar';
+import TurnOrderModal from '@/board/components/TurnOrderModal';
 import { contactLane } from '@/board/mlp/turnTrack';
 import { CompactGameState, expandState } from '@/board/sync/persist';
 import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
@@ -229,6 +230,12 @@ function Playing({
   const turn = useTurnCursor({ code: game.code, seat, cursor });
   const order = useTurnOrder({ code: game.code, turnOrder: servedTurnOrder });
   const firstPlayer = order.turnOrder.first_player;
+  // Outlives the decision by the modal's hold, so the result is seen before it goes.
+  const [decidingTurnOrder, setDecidingTurnOrder] = useState(firstPlayer === null);
+  useEffect(() => {
+    if (firstPlayer === null) setDecidingTurnOrder(true);
+  }, [firstPlayer]);
+  const turnOrderDecided = useCallback(() => setDecidingTurnOrder(false), []);
   const { opponentPresent } = useGameSync({
     code: game.code,
     seat,
@@ -322,8 +329,6 @@ function Playing({
                       names={seatNames(game)}
                       cursor={turn.cursor}
                       turnOrder={order.turnOrder}
-                      onRoll={order.roll}
-                      onElect={order.elect}
                       onAdvance={onAdvance}
                       waiting={waiting}
                       away={opponentPresent === false ? [opponent] : []}
@@ -358,6 +363,18 @@ function Playing({
           }
         />
       </div>
+
+      {matchLive && decidingTurnOrder && (
+        <TurnOrderModal
+          seat={seat}
+          names={seatNames(game)}
+          turnOrder={order.turnOrder}
+          opponentPresent={opponentPresent !== false}
+          onRoll={order.roll}
+          onElect={order.elect}
+          onDone={turnOrderDecided}
+        />
+      )}
 
       {/* Asked only of a seat the news reaches mid-game. Anyone who loads the
           page into this state gets the standing invitation above instead. */}

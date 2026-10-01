@@ -19,7 +19,7 @@ export interface BoardControlsProps {
    */
   onGoingFirstChange?: (value: boolean) => void;
   onStartGame: () => void;
-  /** False while a match is still deciding turn order. */
+  /** False while a match is still deciding turn order. Gates the Mulligan too. */
   canStart: boolean;
   /** Whether the one mulligan (rules 103.4.1c) has already been spent. */
   mulliganed: boolean;
@@ -92,8 +92,8 @@ export default function BoardControls({
           </button>
           <button
             onClick={onMulligan}
-            disabled={mulliganed}
-            className={mulliganed ? RAIL_BTN_INERT : RAIL_BTN}
+            disabled={mulliganed || !canStart}
+            className={mulliganed || !canStart ? RAIL_BTN_INERT : RAIL_BTN}
           >
             {mulliganed ? 'Mulligan used' : 'Mulligan'}
           </button>

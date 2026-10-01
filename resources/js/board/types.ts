@@ -102,6 +102,11 @@ export interface GameState {
    * is per game rather than per hand.
    */
   mulliganed: boolean;
+  /**
+   * Whether the opening hand has been drawn. A match holds it back until turn
+   * order is decided; solo play draws it with the deal.
+   */
+  handDrawn: boolean;
 }
 
 export const OPENING_HAND_SIZE = 5;

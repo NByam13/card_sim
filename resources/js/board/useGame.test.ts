@@ -69,6 +69,7 @@ function gameState(
     started: false,
     goingFirst: null,
     mulliganed: false,
+    handDrawn: true,
     ...extra,
   };
 }
@@ -243,6 +244,50 @@ describe('NEXT_TURN', () => {
 
     expect(run(board(), { type: 'NEXT_TURN', draw: true }).zones.hand).toHaveLength(1);
     expect(run(board(), { type: 'NEXT_TURN' }).zones.hand).toHaveLength(1);
+  });
+});
+
+describe('the opening hand', () => {
+  const deck: Deck = {
+    code: 'test',
+    name: 'Test',
+    main_character: null,
+    cards: [{ card: card(), zone: 'main', quantity: 12 }],
+    tokens: [],
+  };
+
+  it('is drawn with the deal by default', () => {
+    const { result } = renderHook(() => useGame(deck));
+
+    expect(result.current.state.zones.hand).toHaveLength(5);
+    expect(result.current.state.handDrawn).toBe(true);
+  });
+
+  it('can be held back, and is then drawn off the top once', () => {
+    const { result } = renderHook(() => useGame(deck, null, false));
+
+    expect(result.current.state.zones.hand).toHaveLength(0);
+    expect(result.current.state.zones.library).toHaveLength(12);
+
+    const top = result.current.state.zones.library.slice(0, 5).map((c) => c.uid);
+    act(() => result.current.dispatch({ type: 'DRAW_OPENING_HAND' }));
+
+    expect(result.current.state.zones.hand.map((c) => c.uid)).toEqual(top);
+    expect(result.current.state.zones.library).toHaveLength(7);
+
+    act(() => result.current.dispatch({ type: 'DRAW_OPENING_HAND' }));
+
+    expect(result.current.state.zones.hand).toHaveLength(5);
+  });
+
+  it('must be drawn before a Mulligan or Start Game', () => {
+    const state = gameState(
+      { library: Array.from({ length: 10 }, (_, i) => inst({ uid: `l${i}` })) },
+      { handDrawn: false }
+    );
+
+    expect(run(state, { type: 'MULLIGAN' })).toBe(state);
+    expect(run(state, { type: 'START_GAME' })).toBe(state);
   });
 });
 

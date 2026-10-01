@@ -22,6 +22,7 @@ function boardWith(hand: CardInstance[] = []): GameState {
     started: true,
     goingFirst: null,
     mulliganed: false,
+    handDrawn: true,
   };
 }
 

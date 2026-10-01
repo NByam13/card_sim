@@ -73,10 +73,11 @@ export function hydrateMirror(state: PublicState, cards: ReadonlyMap<string, Car
     counts: state.counts,
     turn: state.turn,
     started: state.started,
-    // Neither crosses the wire: one is the sender's own lane numbering and the
-    // other is theirs to spend.
+    // None of these cross the wire: the sender's own lane numbering, their
+    // mulligan to spend, and a hand the mirror only ever counts.
     goingFirst: null,
     mulliganed: false,
+    handDrawn: true,
   };
 }
 
@@ -109,5 +110,6 @@ export function emptyMirror(): MirrorState {
     started: false,
     goingFirst: null,
     mulliganed: false,
+    handDrawn: true,
   };
 }
