@@ -16,6 +16,7 @@ import ZoomControls from '@/board/components/ZoomControls';
 import { GameState } from '@/board/types';
 import { usePersistentZoom } from '@/board/zoom';
 import { Deck } from '@/types/cards';
+import { GameStatus } from '@/types/game';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
@@ -32,7 +33,7 @@ interface SeatState {
 interface Game {
   code: string;
   setup: string;
-  status: 'waiting' | 'active' | 'finished';
+  status: GameStatus;
   seats: Record<Seat, SeatState>;
   you: Seat | null;
   /** Which seats are ready to play each other. Both means the match is live. */
@@ -121,7 +122,9 @@ export default function Show({
           <>
             <header className="space-y-1">
               <h1 className="text-2xl font-semibold">
-                {game.status === 'waiting' ? 'Waiting for a second player' : 'Both players seated'}
+                {game.status === GameStatus.Waiting
+                  ? 'Waiting for a second player'
+                  : 'Both players seated'}
               </h1>
               <p className="text-sm text-gray-600">
                 {seat ? `You are the ${seat}.` : 'You are watching this game.'}
@@ -224,7 +227,7 @@ function Playing({
   const { publish, announce } = useBoardRelay({
     code: game.code,
     relaying: matchLive,
-    saving: game.status === 'active',
+    saving: game.status === GameStatus.Active,
   });
   const { mirror, receive } = useMirror(lookupCard, game.opponent_state);
   const turn = useTurnCursor({ code: game.code, seat, cursor });
