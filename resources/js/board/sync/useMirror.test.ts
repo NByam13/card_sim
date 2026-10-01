@@ -171,6 +171,19 @@ describe('useMirror', () => {
     await settle();
   });
 
+  it('fills in the saved board when a frame lands while its lookup is in flight', async () => {
+    let answer!: (card: Card) => void;
+    const lookup = vi.fn(() => new Promise<Card | null>((resolve) => (answer = resolve)));
+    const saved = publicState({ adventureC: [wire()] });
+    const { result } = renderHook(() => useMirror(lookup, saved));
+
+    act(() => result.current.receive(frame(1, publicState({ adventureC: [wire()] }))));
+    await act(async () => answer(card('TEST-C01')));
+
+    expect(lookup).toHaveBeenCalledOnce();
+    expect(result.current.mirror?.zones.adventureC[0].card.name).toBe('Card TEST-C01');
+  });
+
   it('carries the hidden zone counts through', async () => {
     const { result } = renderHook(() => useMirror(resolver()));
     const state = publicState();

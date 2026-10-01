@@ -49,6 +49,14 @@ export function useMirror(
   const lookupRef = useRef(lookup);
   lookupRef.current = lookup;
 
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!state) return;
 
@@ -59,8 +67,9 @@ export function useMirror(
 
     missing.forEach((number) => pending.current.add(number));
 
-    let live = true;
-
+    // Not cancelled when the state moves on: a card is keyed by its number, and
+    // the next run skips everything still pending, so a discarded answer is never
+    // asked for again.
     Promise.all(
       missing.map((number) =>
         lookupRef
@@ -71,7 +80,7 @@ export function useMirror(
     ).then((results) => {
       // Clearing `pending` either way lets the next frame retry what failed.
       results.forEach(([number]) => pending.current.delete(number));
-      if (!live) return;
+      if (!mounted.current) return;
 
       const found = results.filter((entry): entry is [string, Card] => entry[1] !== null);
       if (found.length === 0) return;
@@ -82,10 +91,6 @@ export function useMirror(
         return next;
       });
     });
-
-    return () => {
-      live = false;
-    };
   }, [state, cards]);
 
   const mirror = useMemo(() => (state ? hydrateMirror(state, cards) : null), [state, cards]);
