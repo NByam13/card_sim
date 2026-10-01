@@ -3,7 +3,9 @@
 namespace Database\Factories;
 
 use App\Enums\GameStatus;
+use App\Enums\MatchFormat;
 use App\Enums\Seat;
+use App\Enums\WinReason;
 use App\Games\Seating;
 use App\Models\Game;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -67,6 +69,35 @@ class GameFactory extends Factory
     public function finished(): static
     {
         return $this->state(fn () => ['status' => GameStatus::Finished]);
+    }
+
+    public function bo3(): static
+    {
+        return $this->state(fn () => ['format' => MatchFormat::Bo3]);
+    }
+
+    /**
+     * Games already played, won by these seats in order. The match finishes if
+     * they decide it; otherwise it is on the next game. Apply after the format.
+     */
+    public function gamesWonBy(Seat ...$winners): static
+    {
+        return $this->state(function (array $attributes) use ($winners) {
+            $format = $attributes['format'] ?? MatchFormat::Bo1;
+            $format = $format instanceof MatchFormat ? $format : MatchFormat::from($format);
+            $results = [];
+
+            foreach (array_values($winners) as $index => $winner) {
+                $results[] = ['game' => $index + 1, 'winner' => $winner->value, 'reason' => WinReason::Story->value];
+            }
+
+            $wins = array_count_values(array_column($results, 'winner'));
+            $decidedBy = array_search($format->gamesToWin(), $wins, true);
+
+            return $decidedBy === false
+                ? ['game_results' => $results, 'game_number' => count($results) + 1]
+                : ['game_results' => $results, 'game_number' => count($results), 'status' => GameStatus::Finished, 'winner_seat' => Seat::from($decidedBy)];
+        });
     }
 
     /** The dice rolled, with the winner yet to elect who goes first. */

@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Enums\GameStatus;
+use App\Enums\MatchFormat;
 use App\Enums\Seat;
+use App\Enums\WinReason;
 use Closure;
 use Database\Factories\GameFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,6 +31,10 @@ use LogicException;
  * @property int $turn_number
  * @property Seat|null $active_seat
  * @property string|null $turn_stop
+ * @property MatchFormat $format
+ * @property int $game_number
+ * @property list<array{game: int, winner: 'host'|'guest', reason: 'story'|'concede'}> $game_results
+ * @property Seat|null $winner_seat
  */
 class Game extends Model
 {
@@ -66,6 +72,10 @@ class Game extends Model
         'turn_number',
         'active_seat',
         'turn_stop',
+        'format',
+        'game_number',
+        'game_results',
+        'winner_seat',
         'last_activity_at',
     ];
 
@@ -79,6 +89,9 @@ class Game extends Model
         'setup' => 'mlp',
         'status' => GameStatus::Waiting->value,
         'turn_number' => 0,
+        'format' => MatchFormat::Bo1->value,
+        'game_number' => 1,
+        'game_results' => '[]',
     ];
 
     /** The token hashes never leave the server. */
@@ -103,6 +116,10 @@ class Game extends Model
             'turn_order_roll' => 'array',
             'turn_number' => 'integer',
             'active_seat' => Seat::class,
+            'format' => MatchFormat::class,
+            'game_number' => 'integer',
+            'game_results' => 'array',
+            'winner_seat' => Seat::class,
             'last_activity_at' => 'datetime',
         ];
     }
@@ -284,6 +301,56 @@ class Game extends Model
             $seat->column('public_state') => null,
             $seat->column('seq') => 0,
         ];
+    }
+
+    // ── Match format ────────────────────────────────────────────────────────
+
+    public function gamesToWin(): int
+    {
+        return $this->format->gamesToWin();
+    }
+
+    public function winsFor(Seat $seat): int
+    {
+        return count(array_filter($this->game_results, fn (array $result) => $result['winner'] === $seat->value));
+    }
+
+    /**
+     * Whether the format can no longer change: once game 1's turn order is
+     * decided, which is what mounts the board.
+     */
+    public function formatLocked(): bool
+    {
+        return $this->status === GameStatus::Finished || $this->game_number > 1 || $this->turnOrderDecided();
+    }
+
+    /**
+     * Record the winner of the game in progress, and finish the match if that
+     * game decided it. Returns whether this call's result was the one kept.
+     *
+     * Guarded on the results already recorded, so a claim and a concession
+     * landing at once record one game, not two.
+     */
+    public function recordGameResult(Seat $winnerSeat, WinReason $reason): bool
+    {
+        $recorded = count($this->game_results);
+
+        if ($this->status !== GameStatus::Active || $recorded >= $this->game_number) {
+            return false;
+        }
+
+        $values = ['game_results' => [
+            ...$this->game_results,
+            ['game' => $this->game_number, 'winner' => $winnerSeat->value, 'reason' => $reason->value],
+        ]];
+
+        if ($this->winsFor($winnerSeat) + 1 >= $this->gamesToWin()) {
+            $values += ['status' => GameStatus::Finished, 'winner_seat' => $winnerSeat];
+        }
+
+        return $this->fillWhere($values, fn (Builder $query) => $query
+            ->where('status', GameStatus::Active)
+            ->whereJsonLength('game_results', $recorded));
     }
 
     // ── Turn order ──────────────────────────────────────────────────────────
