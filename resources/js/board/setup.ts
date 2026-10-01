@@ -167,8 +167,9 @@ export function emptyZones(): Record<ZoneId, CardInstance[]> {
 /**
  * Build the opening game state from a deck: shuffle the Main Deck into the
  * library and the Scene Deck into its own pile, lay the Story cards left→right
- * into stages I–IV, seat the Main Character, and draw the opening hand. Plans
- * are NOT dealt here — that happens on Start Game, after the player sees their hand.
+ * into stages I–IV, seat the Main Character, and draw the opening hand unless
+ * `drawHand` is false (see `DRAW_OPENING_HAND`). Plans are NOT dealt here — that
+ * happens on Start Game, after the player sees their hand.
  *
  * Every piece is optional. The deck endpoint deliberately does not refuse an
  * incomplete deck ("a table decides what an incomplete deck means"), so a deck
@@ -176,7 +177,7 @@ export function emptyZones(): Record<ZoneId, CardInstance[]> {
  * board with those zones empty rather than failing. The controls say what is
  * missing; the deal does not.
  */
-export function initialState(deck: Deck): GameState {
+export function initialState(deck: Deck, drawHand = true): GameState {
   const zones = emptyZones();
 
   const byZone = (zone: string) => deck.cards.filter((e) => e.zone === zone);
@@ -197,9 +198,29 @@ export function initialState(deck: Deck): GameState {
 
   if (deck.main_character) zones.mainChar = [instance(deck.main_character)];
 
-  // Opening hand off the top of the shuffled library.
-  zones.hand = library.splice(0, Math.min(OPENING_HAND_SIZE, library.length));
   zones.library = library;
+  const state: GameState = {
+    zones,
+    turn: 1,
+    started: false,
+    goingFirst: null,
+    mulliganed: false,
+    handDrawn: false,
+  };
 
-  return { zones, turn: 1, started: false, goingFirst: null, mulliganed: false };
+  return drawHand ? drawOpeningHand(state) : state;
+}
+
+/** Draw the opening hand off the top of the library, once. */
+export function drawOpeningHand(state: GameState): GameState {
+  if (state.handDrawn) return state;
+
+  const library = [...state.zones.library];
+  const hand = library.splice(0, Math.min(OPENING_HAND_SIZE, library.length));
+
+  return {
+    ...state,
+    handDrawn: true,
+    zones: { ...state.zones, hand: [...state.zones.hand, ...hand], library },
+  };
 }

@@ -7,7 +7,14 @@ import { emptyZones } from './setup';
 import { GameState } from './types';
 
 function gameState(turn = 1): GameState {
-  return { zones: emptyZones(), turn, started: true, goingFirst: null, mulliganed: false };
+  return {
+    zones: emptyZones(),
+    turn,
+    started: true,
+    goingFirst: null,
+    mulliganed: false,
+    handDrawn: true,
+  };
 }
 
 /** Put a card carrying `uid` under every hit test, or bare board when null. */

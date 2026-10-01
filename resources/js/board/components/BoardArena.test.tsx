@@ -45,7 +45,7 @@ function boardWithRetiredCard(): GameState {
   zones.retire = [inst('retired-1', card(1, 'Applejack'))];
   zones.library = [inst('lib-1', card(2, 'Rarity'))];
 
-  return { zones, turn: 1, started: true, goingFirst: true, mulliganed: false };
+  return { zones, turn: 1, started: true, goingFirst: true, mulliganed: false, handDrawn: true };
 }
 
 function arena() {
@@ -270,6 +270,36 @@ describe('BoardArena, in a match', () => {
     expect(deciding).toHaveLength(2);
     deciding.forEach((button) => expect(button).toBeDisabled());
     expect(screen.queryByRole('button', { name: 'Going 1st' })).toBeNull();
+  });
+
+  it('holds the opening hand back until turn order is decided', () => {
+    const onState = vi.fn();
+    const turnCursor = {
+      cursor: { turn_number: 0, active_seat: null, turn_stop: null, my_turn: true },
+      advance: vi.fn(),
+      stepBack: vi.fn(),
+    };
+    const board = (goingFirst: boolean | null) => (
+      <BoardArena
+        deck={deck}
+        scale={1}
+        savedState={null}
+        onState={onState}
+        turnCursor={turnCursor}
+        goingFirst={goingFirst}
+      />
+    );
+    const latest = (): GameState => onState.mock.lastCall?.[0] as GameState;
+
+    const { rerender } = render(board(null));
+
+    expect(latest().zones.hand).toHaveLength(0);
+    expect(latest().zones.library).toHaveLength(1);
+
+    rerender(board(true));
+
+    expect(latest().zones.hand).toHaveLength(1);
+    expect(latest().zones.library).toHaveLength(0);
   });
 
   it('takes who is on the play from the match', () => {

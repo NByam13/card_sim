@@ -8,4 +8,69 @@
         'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
+
+    --animate-die-idle: die-idle 2.4s ease-in-out infinite;
+    --animate-die-tumble: die-tumble 0.32s linear infinite;
+    --animate-die-land: die-land 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
+    --animate-pop-in: pop-in 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+    --animate-rise-in: rise-in 0.35s ease-out both;
+
+    @keyframes die-idle {
+        0%,
+        100% {
+            transform: translateY(0) rotate(-3deg);
+        }
+        50% {
+            transform: translateY(-4px) rotate(3deg);
+        }
+    }
+
+    @keyframes die-tumble {
+        0% {
+            transform: translateY(0) rotate(0deg);
+        }
+        25% {
+            transform: translateY(-10px) rotate(-20deg);
+        }
+        50% {
+            transform: translateY(0) rotate(0deg);
+        }
+        75% {
+            transform: translateY(-6px) rotate(20deg);
+        }
+        100% {
+            transform: translateY(0) rotate(0deg);
+        }
+    }
+
+    @keyframes die-land {
+        0% {
+            transform: scale(1.25);
+        }
+        100% {
+            transform: scale(1);
+        }
+    }
+
+    @keyframes pop-in {
+        0% {
+            opacity: 0;
+            transform: scale(0.6);
+        }
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @keyframes rise-in {
+        0% {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 }

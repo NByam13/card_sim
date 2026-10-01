@@ -28,6 +28,7 @@ function gameState(zones: Partial<Record<ZoneId, CardInstance[]>> = {}): GameSta
     started: true,
     goingFirst: null,
     mulliganed: false,
+    handDrawn: true,
   };
 }
 

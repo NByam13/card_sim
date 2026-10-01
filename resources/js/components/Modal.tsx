@@ -20,6 +20,7 @@ export default function Modal({
   maxWidth = '2xl',
   closeable = true,
   labelledBy,
+  backdrop = 'backdrop:bg-gray-500/75',
 }: PropsWithChildren<{
   show: boolean;
   onClose: () => void;
@@ -27,6 +28,8 @@ export default function Modal({
   closeable?: boolean;
   /** id of the element naming this dialog, for screen readers. */
   labelledBy?: string;
+  /** `backdrop:` classes for what shows behind the panel. */
+  backdrop?: string;
 }>) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -76,7 +79,7 @@ export default function Modal({
       onClick={(e) => {
         if (closeable && e.target === ref.current) onClose();
       }}
-      className={`m-auto w-full bg-transparent p-4 backdrop:bg-gray-500/75 ${maxWidthClass}`}
+      className={`m-auto w-full bg-transparent p-4 ${backdrop} ${maxWidthClass}`}
     >
       <div className="overflow-hidden rounded-lg bg-white shadow-xl">{children}</div>
     </dialog>,

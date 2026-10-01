@@ -1,6 +1,13 @@
 import { Card, Deck } from '@/types/cards';
 import { useReducer } from 'react';
-import { arrangeSceneDeck, emptyZones, initialState, instance, shuffleDeck } from './setup';
+import {
+  arrangeSceneDeck,
+  drawOpeningHand,
+  emptyZones,
+  initialState,
+  instance,
+  shuffleDeck,
+} from './setup';
 import { ALL_ZONES, CardInstance, GameState, PLAN_ZONES, STORY_ZONES, ZoneId } from './types';
 
 /**
@@ -25,6 +32,8 @@ type Action =
   | { type: 'SHUFFLE_SCENE_DECK' }
   | { type: 'START_GAME' }
   | { type: 'SET_GOING_FIRST'; goingFirst: boolean | null }
+  /** The five-card draw a match holds back until turn order is decided. A no-op once drawn. */
+  | { type: 'DRAW_OPENING_HAND' }
   | { type: 'MULLIGAN' }
   /**
    * Untap, reveal a Scene, draw 1. `draw` is only ever false on a shared turn 1,
@@ -228,7 +237,7 @@ function reducer(state: GameState, action: Action): GameState {
       };
 
     case 'START_GAME': {
-      if (state.started) return state;
+      if (state.started || !state.handDrawn) return state;
       const library = [...state.zones.library];
       const zones = { ...state.zones };
       // Top of the library deals face-down onto each Story stage as a Plan.
@@ -257,13 +266,16 @@ function reducer(state: GameState, action: Action): GameState {
         ? state
         : { ...state, goingFirst: action.goingFirst };
 
+    case 'DRAW_OPENING_HAND':
+      return drawOpeningHand(state);
+
     case 'MULLIGAN': {
       // Rules 103.4.1a: the hand goes to the *bottom* of the Main Deck in its
       // current order and the replacement comes off the top. Deliberately NO
       // shuffle, which is the whole point of the rule: it means the cards you just
       // put back are the last ones you could see again. 103.4.1c caps it at one
       // per game, and Start Game closes the window regardless.
-      if (state.started || state.mulliganed) return state;
+      if (state.started || state.mulliganed || !state.handDrawn) return state;
       const library = [...state.zones.library, ...state.zones.hand];
       const hand = library.splice(0, Math.min(state.zones.hand.length, library.length));
       return { ...state, mulliganed: true, zones: { ...state.zones, library, hand } };
@@ -452,7 +464,7 @@ function reducer(state: GameState, action: Action): GameState {
  * replaces the fresh opening state, and is what the persistence slice will hand
  * a reconnecting player; RESTART still deals a brand-new board from the deck.
  */
-export function useGame(deck: Deck, saved?: GameState | null) {
+export function useGame(deck: Deck, saved?: GameState | null, drawHand = true) {
   const [state, dispatch] = useReducer(
     // RESTART deals a brand-new board, but who's on the play is set once — carry
     // it across so a restart doesn't silently deal the first player's Scene face
@@ -460,7 +472,7 @@ export function useGame(deck: Deck, saved?: GameState | null) {
     (s: GameState, a: Action): GameState =>
       a.type === 'RESTART' ? { ...initialState(deck), goingFirst: s.goingFirst } : reducer(s, a),
     deck,
-    (d: Deck) => saved ?? initialState(d)
+    (d: Deck) => saved ?? initialState(d, drawHand)
   );
 
   return { state, dispatch } as const;

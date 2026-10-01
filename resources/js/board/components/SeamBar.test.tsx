@@ -22,67 +22,14 @@ const rolled: TurnOrder = {
 const decided: TurnOrder = { ...rolled, first_player: 'guest' };
 
 describe('SeamBar', () => {
-  describe('before the roll', () => {
-    it('offers a seat the roll', async () => {
-      const onRoll = vi.fn();
-      render(
-        <SeamBar
-          seat="host"
-          names={names}
-          cursor={cursor()}
-          turnOrder={{ roll: null, first_player: null }}
-          onRoll={onRoll}
-        />
-      );
+  describe('before turn order is decided', () => {
+    it.each([
+      ['before the roll', { roll: null, first_player: null }],
+      ['during the election', rolled],
+    ])('rests with nothing to press %s', (_, turnOrder: TurnOrder) => {
+      render(<SeamBar seat="host" names={names} cursor={cursor()} turnOrder={turnOrder} />);
 
-      await userEvent.click(screen.getByRole('button', { name: 'Roll' }));
-
-      expect(onRoll).toHaveBeenCalledOnce();
-    });
-
-    it('shows a watcher the wait and nothing to press', () => {
-      render(
-        <SeamBar
-          seat={null}
-          names={names}
-          cursor={cursor()}
-          turnOrder={{ roll: null, first_player: null }}
-        />
-      );
-
-      expect(screen.getByText('Waiting for the roll…')).toBeTruthy();
-      expect(screen.queryByRole('button')).toBeNull();
-    });
-  });
-
-  describe('the election', () => {
-    it('shows the dice and lets the winner choose', async () => {
-      const onElect = vi.fn();
-      render(
-        <SeamBar seat="host" names={names} cursor={cursor()} turnOrder={rolled} onElect={onElect} />
-      );
-
-      expect(screen.getByLabelText('You rolled 11')).toBeTruthy();
-      expect(screen.getByLabelText('Rarity rolled 3')).toBeTruthy();
-
-      await userEvent.click(screen.getByRole('button', { name: 'Go second' }));
-
-      expect(onElect).toHaveBeenCalledWith('guest');
-    });
-
-    it('leaves the loser waiting on the winner', () => {
-      render(
-        <SeamBar
-          seat="guest"
-          names={names}
-          cursor={cursor()}
-          turnOrder={rolled}
-          onElect={vi.fn()}
-        />
-      );
-
-      expect(screen.getByText('Twilight won the roll')).toBeTruthy();
-      expect(screen.getByText('Choosing who goes first…')).toBeTruthy();
+      expect(screen.getByText('Deciding who goes first…')).toBeTruthy();
       expect(screen.queryByRole('button')).toBeNull();
     });
   });
