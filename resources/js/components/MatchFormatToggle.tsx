@@ -22,6 +22,7 @@ export default function MatchFormatToggle({
   editable: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const active = OPTIONS.find((option) => option.value === format) ?? OPTIONS[0];
 
   const select = (value: MatchFormat) => {
@@ -35,6 +36,8 @@ export default function MatchFormatToggle({
         only: ['game', 'canChangeFormat'],
         preserveScroll: true,
         preserveState: true,
+        onSuccess: () => setError(null),
+        onError: (errors) => setError(errors.format ?? null),
         onFinish: () => setBusy(false),
       }
     );
@@ -72,6 +75,7 @@ export default function MatchFormatToggle({
       <p className="text-xs text-gray-500">
         {editable ? active.hint : `${active.hint} The host picks the format.`}
       </p>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

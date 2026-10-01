@@ -3,7 +3,6 @@
 namespace Tests\Feature\Games;
 
 use App\Enums\MatchFormat;
-use App\Enums\Seat;
 use App\Events\MatchFormatChanged;
 use App\Models\Game;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,20 +46,9 @@ class MatchFormatTest extends TestCase
         $this->assertSame(MatchFormat::Bo3, $game->refresh()->format);
     }
 
-    public function test_the_host_can_switch_back_before_the_match_is_live(): void
-    {
-        // The guest has taken the seat and is looking at the format before accepting.
-        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->bo3()->create();
-
-        $this->asSeat($game, 'host-token')->patch("/games/{$game->code}/format", ['format' => 'bo1'])
-            ->assertSessionHasNoErrors();
-
-        $this->assertSame(MatchFormat::Bo1, $game->refresh()->format);
-    }
-
     public function test_switching_tells_the_table(): void
     {
-        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->create();
+        $game = Game::factory()->hostToken('host-token')->create();
 
         $this->asSeat($game, 'host-token')->patch("/games/{$game->code}/format", ['format' => 'bo3']);
 
@@ -91,9 +79,10 @@ class MatchFormatTest extends TestCase
         $this->assertSame(MatchFormat::Bo1, $game->refresh()->format);
     }
 
-    public function test_the_host_cannot_switch_once_the_match_is_live(): void
+    public function test_the_host_cannot_switch_once_the_guest_is_seated(): void
     {
-        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->create();
+        // Joining accepts for the guest, so the format they saw in the lobby is the one they agreed to.
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->create();
 
         $this->asSeat($game, 'host-token')->patch("/games/{$game->code}/format", ['format' => 'bo3'])
             ->assertForbidden();
@@ -102,9 +91,9 @@ class MatchFormatTest extends TestCase
         Event::assertNotDispatched(MatchFormatChanged::class);
     }
 
-    public function test_the_lobby_stops_offering_the_switch_once_the_match_is_live(): void
+    public function test_the_host_is_not_offered_the_switch_once_the_guest_is_seated(): void
     {
-        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->create();
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->create();
 
         $this->asSeat($game, 'host-token')->get("/games/{$game->code}")
             ->assertInertia(fn (AssertableInertia $page) => $page->where('canChangeFormat', false));
@@ -130,12 +119,12 @@ class MatchFormatTest extends TestCase
         $this->assertSame(MatchFormat::Bo1, $game->refresh()->format);
     }
 
-    public function test_a_change_that_loses_the_race_to_the_match_going_live_is_refused(): void
+    public function test_a_change_that_loses_the_race_to_the_guest_joining_is_refused(): void
     {
-        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->create();
+        $game = Game::factory()->hostToken('host-token')->create();
         $stale = Game::find($game->id);
 
-        $game->acceptFor(Seat::Host);
+        Game::whereKey($game->id)->update(['guest_token_hash' => Game::hashToken('guest-token'), 'status' => 'active']);
 
         $this->assertFalse($stale->changeFormat(MatchFormat::Bo3));
         $this->assertSame(MatchFormat::Bo1, $game->refresh()->format);

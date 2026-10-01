@@ -2,7 +2,7 @@ import { http } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/types/cards';
-import { MatchFormat, Role, Seat, SPECTATOR_ROLE } from '@/types/game';
+import { Role, Seat, SPECTATOR_ROLE } from '@/types/game';
 import { StateFrame, TurnOrderRoll, WireCursor } from './types';
 
 interface Member {
@@ -43,7 +43,6 @@ export function useGameSync({
   onTurnAdvanced,
   onTurnOrderRolled,
   onTurnOrderDecided,
-  onFormatChanged,
 }: {
   code: string;
   seat: Seat;
@@ -61,8 +60,6 @@ export function useGameSync({
   onTurnOrderRolled: (roll: TurnOrderRoll) => void;
   /** The roll winner chose who goes first. Also heard by the seat that chose. */
   onTurnOrderDecided: (firstPlayer: Seat) => void;
-  /** The host changed the match format before the match went live. */
-  onFormatChanged: (format: MatchFormat) => void;
 }): {
   /** Null until presence has answered, so a fresh page does not flash the opponent away. */
   opponentPresent: boolean | null;
@@ -80,7 +77,6 @@ export function useGameSync({
     onTurnAdvanced,
     onTurnOrderRolled,
     onTurnOrderDecided,
-    onFormatChanged,
   });
   handlers.current = {
     onFrame,
@@ -90,7 +86,6 @@ export function useGameSync({
     onTurnAdvanced,
     onTurnOrderRolled,
     onTurnOrderDecided,
-    onFormatChanged,
   };
 
   const { channel } = useEchoPresence(`game.${code}`, [], () => {});
@@ -127,9 +122,6 @@ export function useGameSync({
       .listen('.seat.claimed', () => handlers.current.onSeatClaimed())
       .listen('.match.accepted', ({ accepted }: { accepted: Acceptance }) =>
         handlers.current.onAccepted(accepted)
-      )
-      .listen('.match.format_changed', ({ format }: { format: MatchFormat }) =>
-        handlers.current.onFormatChanged(format)
       )
       .error((error: unknown) => console.error('game channel subscription failed', error));
 

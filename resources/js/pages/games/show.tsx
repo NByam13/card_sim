@@ -107,9 +107,6 @@ export default function Show({
         cursor={cursor}
         turnOrder={turnOrder}
         deck={game.deck}
-        format={format}
-        canChangeFormat={canChangeFormat}
-        onFormatChanged={setFormat}
         onWaitingRoom={seated ? null : () => setSolo(false)}
       />
     );
@@ -210,9 +207,6 @@ function Playing({
   cursor,
   turnOrder: servedTurnOrder,
   deck,
-  format,
-  canChangeFormat,
-  onFormatChanged,
   onWaitingRoom,
 }: {
   game: Game;
@@ -220,9 +214,6 @@ function Playing({
   cursor: TurnCursor;
   turnOrder: TurnOrder;
   deck: Deck;
-  format: MatchFormat;
-  canChangeFormat: boolean;
-  onFormatChanged: (format: MatchFormat) => void;
   /** Back to the lobby, or null once the second seat is taken and there is no lobby left to want. */
   onWaitingRoom: (() => void) | null;
 }) {
@@ -268,7 +259,6 @@ function Playing({
     onTurnAdvanced: turn.receive,
     onTurnOrderRolled: order.receiveRoll,
     onTurnOrderDecided: order.receiveDecided,
-    onFormatChanged,
     // Presence cannot tell a watcher from the player who just sat down, and the
     // props this page is holding predate the claim either way.
     onSeatClaimed: useCallback(() => router.reload({ only: ['game'] }), []),
@@ -382,11 +372,7 @@ function Playing({
                     youAccepted={accepted[seat]}
                     onAccept={acceptMatch}
                     formatToggle={
-                      <MatchFormatToggle
-                        code={game.code}
-                        format={format}
-                        editable={canChangeFormat}
-                      />
+                      <MatchFormatToggle code={game.code} format={game.format} editable={false} />
                     }
                   />
                 )}

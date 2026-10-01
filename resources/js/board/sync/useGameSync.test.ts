@@ -77,7 +77,6 @@ function sync(seat: Seat = 'host') {
   const onTurnAdvanced = vi.fn();
   const onTurnOrderRolled = vi.fn();
   const onTurnOrderDecided = vi.fn();
-  const onFormatChanged = vi.fn();
   const view = renderHook(() =>
     useGameSync({
       code: 'abc123',
@@ -89,7 +88,6 @@ function sync(seat: Seat = 'host') {
       onTurnAdvanced,
       onTurnOrderRolled,
       onTurnOrderDecided,
-      onFormatChanged,
     })
   );
 
@@ -102,7 +100,6 @@ function sync(seat: Seat = 'host') {
     onTurnAdvanced,
     onTurnOrderRolled,
     onTurnOrderDecided,
-    onFormatChanged,
   };
 }
 
@@ -236,14 +233,6 @@ describe('useGameSync', () => {
     expect(onTurnOrderDecided).toHaveBeenCalledWith('guest');
   });
 
-  it('hands over a change of match format', () => {
-    const { onFormatChanged } = sync('guest');
-
-    act(() => presence.bound.events['.match.format_changed']?.({ format: 'bo3' }));
-
-    expect(onFormatChanged).toHaveBeenCalledWith('bo3');
-  });
-
   /**
    * Reverb cannot say who sent a client event and accepts them from connections
    * that never subscribed. Not listening is what makes an injected one inert.
@@ -256,7 +245,6 @@ describe('useGameSync', () => {
       '.board.state',
       '.seat.claimed',
       '.match.accepted',
-      '.match.format_changed',
       '.turn.advanced',
       '.turn_order.rolled',
       '.turn_order.decided',
