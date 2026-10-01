@@ -203,8 +203,7 @@ describe('SeamBar', () => {
       );
 
       const score = screen.getByLabelText('Score');
-      expect(within(score).getByText('You 0–1 Twilight')).toBeTruthy();
-      expect(within(score).getByText('First to 2')).toBeTruthy();
+      expect(score.textContent).toBe('You0–1TwilightFirst to 2');
     });
 
     it('shows a watcher the host first', () => {
@@ -212,7 +211,7 @@ describe('SeamBar', () => {
         <SeamBar seat={null} names={names} cursor={cursor()} turnOrder={decided} score={bo3} />
       );
 
-      expect(screen.getByText('Twilight 1–0 Rarity')).toBeTruthy();
+      expect(screen.getByLabelText('Score').textContent).toBe('Twilight1–0RarityFirst to 2');
     });
 
     it('leaves a Bo1 without one', () => {

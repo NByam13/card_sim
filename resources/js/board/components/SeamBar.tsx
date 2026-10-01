@@ -12,6 +12,9 @@ const CAPTION = 'text-[10px] font-semibold tracking-wide whitespace-nowrap text-
 const AWAY =
   'rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-800 uppercase';
 
+const SCORE_CHIP =
+  'min-w-5 rounded-md bg-emerald-600 px-1.5 text-center font-semibold text-white tabular-nums shadow-sm';
+
 const STOP_BASE = 'rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase';
 const STOP_CURRENT = `${STOP_BASE} bg-emerald-600 text-white shadow-sm`;
 const STOP_SPENT = `${STOP_BASE} text-gray-400`;
@@ -134,7 +137,7 @@ function Bar({
       aria-label="Turn"
       className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg bg-slate-100 px-3 py-1 text-xs"
     >
-      <div className="flex items-center gap-2">{presence}</div>
+      <div className="flex items-center gap-3">{presence}</div>
       <div className="flex items-center gap-2">
         <span className={CAPTION}>{caption}</span>
         <div className="flex items-center rounded-full bg-white/70 px-1 py-0.5 ring-1 ring-gray-200">
@@ -159,9 +162,17 @@ function Score({
   const right = opposingSeat(left);
 
   return (
-    <span aria-label="Score" className="flex items-center gap-1.5 text-gray-700">
-      <span className="font-medium">
-        {nameOf(left)} {score.wins[left]}–{score.wins[right]} {nameOf(right)}
+    <span aria-label="Score" className="flex items-center gap-2">
+      <span className="flex items-center gap-2 rounded-full bg-white/70 px-2.5 py-0.5 ring-1 ring-gray-200">
+        <span className="font-medium text-gray-700">{nameOf(left)}</span>
+        <span className="flex items-center gap-1">
+          <span className={SCORE_CHIP}>{score.wins[left]}</span>
+          <span aria-hidden className="text-gray-400">
+            –
+          </span>
+          <span className={SCORE_CHIP}>{score.wins[right]}</span>
+        </span>
+        <span className="font-medium text-gray-700">{nameOf(right)}</span>
       </span>
       <span className={CAPTION}>First to {score.games_to_win}</span>
     </span>
