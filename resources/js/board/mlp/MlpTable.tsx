@@ -43,6 +43,16 @@ export interface TableActions {
   onRevealTopCard: () => void;
 }
 
+/** The shared turn cursor, drawn on a half: whether its seat is acting, and the lane in contact. */
+export interface TableRings {
+  acting: boolean;
+  /** By contact order, so both halves ring the lanes facing each other. */
+  contactLane: number | null;
+}
+
+const ACTING_RING = 'border-emerald-500 ring-2 ring-emerald-500/40';
+const CONTACT_RING = 'ring-2 ring-amber-400';
+
 /** The table proper — everything in play. Lives inside the shell's scroll area. */
 export function MlpGameZone({
   state,
@@ -50,6 +60,7 @@ export function MlpGameZone({
   selection,
   setSelection,
   mirrored = false,
+  rings,
 }: {
   state: GameState;
   scale: number;
@@ -64,6 +75,8 @@ export function MlpGameZone({
    * has to be made twice, and eventually is not.
    */
   mirrored?: boolean;
+  /** Absent outside a live match. */
+  rings?: TableRings;
 }) {
   const z = (id: (typeof ADVENTURE_ZONES)[number] | Parameters<typeof laneNumber>[0]) =>
     state.zones[id];
@@ -125,6 +138,11 @@ export function MlpGameZone({
           // A character and the item adorned onto it share a lane — overlap
           // them so the item peeks out from behind the character.
           overlap
+          className={
+            rings?.contactLane != null && laneNumber(aid, state.goingFirst) === rings.contactLane
+              ? CONTACT_RING
+              : ''
+          }
           style={slot}
         />
       ))}
@@ -135,7 +153,11 @@ export function MlpGameZone({
     // Bordered and raised to set the table apart from the out-of-play bar. Grows
     // to fill the scroll area so a short board still reaches down to the bar.
     // Stays at 1× scale; cards size themselves from the zoom factor.
-    <div className="relative grid flex-1 grid-cols-[auto_1fr_auto] gap-3 rounded-xl border border-gray-300 bg-white/70 p-2">
+    <div
+      className={`relative grid flex-1 grid-cols-[auto_1fr_auto] gap-3 rounded-xl border bg-white/70 p-2 transition-shadow ${
+        rings?.acting ? ACTING_RING : 'border-gray-300'
+      }`}
+    >
       {/*
         Anchored to this box rather than the viewport, so it keeps the table's
         top-left corner whatever the board is zoomed to.

@@ -3,6 +3,7 @@ import BoardArena from '@/board/components/BoardArena';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
 import SeamBar from '@/board/components/SeamBar';
+import { contactLane } from '@/board/mlp/turnTrack';
 import { CompactGameState, expandState } from '@/board/sync/persist';
 import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
 import { useBoardRelay } from '@/board/sync/useBoardRelay';
@@ -265,6 +266,9 @@ function Playing({
   const arenaKey = matchLive ? 'match' : 'solo';
   const savedState = matchLive && !liveOnMount ? null : restored;
 
+  const acting = turn.cursor.active_seat ?? firstPlayer;
+  const lane = contactLane(turn.cursor.turn_stop);
+
   const opponentName = seatNames(game)[opponent];
   // A full visit rather than a bare POST: the board deals fresh from props that
   // no longer carry a saved state, which is what accepting means.
@@ -308,6 +312,7 @@ function Playing({
           turnCursor={matchLive ? turn : undefined}
           goingFirst={matchLive ? (firstPlayer ? firstPlayer === seat : null) : undefined}
           opponentStarted={mirror?.started ?? false}
+          rings={matchLive ? { acting: acting === seat, contactLane: lane } : undefined}
           seam={
             matchLive
               ? ({ onAdvance, waiting }) => (
@@ -338,6 +343,7 @@ function Playing({
                     name={opponentName}
                     present={opponentPresent}
                     goingFirst={firstPlayer ? firstPlayer !== seat : null}
+                    rings={{ acting: acting === opponent, contactLane: lane }}
                   />
                 ) : (
                   <MatchPending
