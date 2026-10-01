@@ -173,6 +173,12 @@ class GameController extends Controller
             'setup' => $game->setup,
             'status' => $game->status,
             'format' => $game->format,
+            'game_number' => $game->game_number,
+            'games_to_win' => $game->gamesToWin(),
+            'wins' => [
+                Seat::Host->value => $game->winsFor(Seat::Host),
+                Seat::Guest->value => $game->winsFor(Seat::Guest),
+            ],
             'seats' => [
                 Seat::Host->value => [
                     'name' => $game->nameFor(Seat::Host),

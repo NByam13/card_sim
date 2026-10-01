@@ -64,6 +64,23 @@ describe('SeamBar', () => {
       expect(onAdvance).toHaveBeenCalledOnce();
     });
 
+    it('offers the win claim on either seat’s turn', async () => {
+      const onClaimWin = vi.fn();
+      render(
+        <SeamBar
+          seat="host"
+          names={names}
+          cursor={{ ...midTurn, my_turn: false }}
+          turnOrder={decided}
+          onClaimWin={onClaimWin}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Claim win' }));
+
+      expect(onClaimWin).toHaveBeenCalledOnce();
+    });
+
     it('names the acting seat and offers nothing when it is not yours', () => {
       render(
         <SeamBar

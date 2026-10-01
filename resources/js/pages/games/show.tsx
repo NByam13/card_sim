@@ -5,6 +5,7 @@ import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
 import SeamBar from '@/board/components/SeamBar';
 import TurnOrderModal from '@/board/components/TurnOrderModal';
+import WinClaimModal, { MatchScore } from '@/board/components/WinClaimModal';
 import { contactLane } from '@/board/mlp/turnTrack';
 import { CompactGameState, expandState } from '@/board/sync/persist';
 import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
@@ -13,6 +14,7 @@ import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
 import { useMirror } from '@/board/sync/useMirror';
 import { useTurnCursor } from '@/board/sync/useTurnCursor';
 import { useTurnOrder } from '@/board/sync/useTurnOrder';
+import { useWinClaim } from '@/board/sync/useWinClaim';
 import ZoomControls from '@/board/components/ZoomControls';
 import { GameState } from '@/board/types';
 import { usePersistentZoom } from '@/board/zoom';
@@ -28,11 +30,10 @@ interface SeatState {
   claimed: boolean;
 }
 
-interface Game {
+interface Game extends MatchScore {
   code: string;
   setup: string;
   status: GameStatus;
-  format: MatchFormat;
   seats: Record<Seat, SeatState>;
   you: Seat | null;
   /** Which seats are ready to play each other. Both means the match is live. */
@@ -288,6 +289,23 @@ function Playing({
   const arenaKey = matchLive ? 'match' : 'solo';
   const savedState = matchLive && !liveOnMount ? null : restored;
 
+  const winClaim = useWinClaim({
+    code: game.code,
+    restoring: savedState,
+    enabled:
+      matchLive &&
+      game.status === GameStatus.Active &&
+      firstPlayer !== null &&
+      game.wins.host + game.wins.guest < game.game_number,
+  });
+  const onBoardState = useCallback(
+    (state: GameState) => {
+      publish(state);
+      winClaim.watch(state);
+    },
+    [publish, winClaim.watch]
+  );
+
   const acting = turn.cursor.active_seat ?? firstPlayer;
   const lane = contactLane(turn.cursor.turn_stop);
 
@@ -326,7 +344,7 @@ function Playing({
           deck={deck}
           scale={scale}
           savedState={savedState}
-          onState={publish}
+          onState={onBoardState}
           // Re-dealing your own opening in front of an opponent who does not
           // re-deal theirs is a way around the mulligan rules, so it is a solo
           // affordance only.
@@ -347,6 +365,7 @@ function Playing({
                       onAdvance={onAdvance}
                       waiting={waiting}
                       away={opponentPresent === false ? [opponent] : []}
+                      onClaimWin={winClaim.claimable ? winClaim.open : undefined}
                     />
                   </div>
                 )
@@ -391,6 +410,18 @@ function Playing({
           onRoll={order.roll}
           onElect={order.elect}
           onDone={turnOrderDecided}
+        />
+      )}
+
+      {winClaim.prompting && (
+        <WinClaimModal
+          seat={seat}
+          opponentName={opponentName}
+          score={game}
+          busy={winClaim.busy}
+          error={winClaim.error}
+          onConfirm={winClaim.claim}
+          onClose={winClaim.dismiss}
         />
       )}
 
