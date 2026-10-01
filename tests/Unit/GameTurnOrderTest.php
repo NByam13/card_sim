@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Enums\Seat;
+use App\Enums\WinReason;
 use App\Models\Game;
 use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -154,7 +155,7 @@ class GameTurnOrderTest extends TestCase
 
     public function test_recording_a_roll_takes_it_without_a_reload(): void
     {
-        $game = Game::factory()->create();
+        $game = $this->activeGame();
         $roll = Game::rollForTurnOrder();
 
         $this->assertTrue($game->recordTurnOrderRoll($roll));
@@ -167,7 +168,7 @@ class GameTurnOrderTest extends TestCase
     /** A seat whose copy of the game predates the other seat's roll. */
     public function test_a_stale_roll_loses_and_picks_up_the_stored_one(): void
     {
-        $game = Game::factory()->create();
+        $game = $this->activeGame();
         $stale = Game::find($game->id);
         $stored = Game::rollForTurnOrder();
         $game->recordTurnOrderRoll($stored);
@@ -180,7 +181,7 @@ class GameTurnOrderTest extends TestCase
 
     public function test_a_losing_election_leaves_the_model_as_it_was(): void
     {
-        $game = Game::factory()->turnOrderRolled(Seat::Host)->create();
+        $game = Game::factory()->guestToken('guest-token')->turnOrderRolled(Seat::Host)->create();
         $stale = Game::find($game->id);
         $game->electFirstPlayer(Seat::Guest);
 
@@ -193,13 +194,43 @@ class GameTurnOrderTest extends TestCase
 
     public function test_writing_turn_order_leaves_other_unsaved_changes_alone(): void
     {
-        $game = Game::factory()->create();
+        $game = $this->activeGame();
         $game->host_name = 'Unsaved';
 
         $game->recordTurnOrderRoll(Game::rollForTurnOrder());
 
         $this->assertTrue($game->isDirty('host_name'));
         $this->assertSame('Host', $game->fresh()->host_name);
+    }
+
+    /** A seat whose copy of the game predates the match being decided. */
+    public function test_a_roll_racing_the_match_finishing_is_not_stored(): void
+    {
+        $game = $this->activeGame();
+        $stale = Game::find($game->id);
+        $game->recordGameResult(Seat::Host, WinReason::Concede);
+
+        $this->assertFalse($stale->recordTurnOrderRoll(Game::rollForTurnOrder()));
+
+        $this->assertNull($stale->turn_order_roll);
+        $this->assertNull($game->fresh()->turn_order_roll);
+    }
+
+    public function test_an_election_racing_the_match_finishing_is_not_stored(): void
+    {
+        $game = Game::factory()->guestToken('guest-token')->turnOrderRolled(Seat::Host)->create();
+        $stale = Game::find($game->id);
+        $game->recordGameResult(Seat::Host, WinReason::Concede);
+
+        $this->assertFalse($stale->electFirstPlayer(Seat::Host));
+
+        $this->assertNull($game->fresh()->first_player);
+    }
+
+    /** Both seats in, so turn order may be written. */
+    private function activeGame(): Game
+    {
+        return Game::factory()->guestToken('guest-token')->create();
     }
 
     /** A die that rolls these faces in order. */

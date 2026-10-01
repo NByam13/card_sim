@@ -3,6 +3,7 @@
 namespace Tests\Feature\Games;
 
 use App\Enums\Seat;
+use App\Enums\WinReason;
 use App\Events\TurnAdvanced;
 use App\Models\Game;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -97,6 +98,22 @@ class TurnCursorTest extends TestCase
         Event::assertNotDispatched(TurnAdvanced::class);
     }
 
+    public function test_the_cursor_cannot_move_once_the_game_is_decided(): void
+    {
+        Event::fake([TurnAdvanced::class]);
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->bo3()->turnOrderDecided()->onTurn(3, Seat::Guest, 'main')
+            ->state(['game_results' => [['game' => 1, 'winner' => 'host', 'reason' => 'story']]])
+            ->create();
+
+        $this->as(Seat::Guest, $game)
+            ->postJson("/games/{$game->code}/cursor", ['ends_turn' => true])
+            ->assertForbidden()
+            ->assertJson(['message' => 'This game has already been decided.']);
+
+        $this->assertSame(3, $game->refresh()->turn_number);
+        Event::assertNotDispatched(TurnAdvanced::class);
+    }
+
     public function test_the_second_player_cannot_open_the_game(): void
     {
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided(Seat::Host)->create();
@@ -171,6 +188,19 @@ class TurnCursorTest extends TestCase
         $this->assertSame(2, $game->turn_number);
         $this->assertSame(Seat::Guest, $game->active_seat);
         $this->assertSame(1, $stale->turn_number);
+    }
+
+    public function test_a_move_is_refused_once_a_result_has_been_recorded(): void
+    {
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->bo3()->turnOrderDecided()->onTurn(1, Seat::Host, 'main')->create();
+        $stale = $game->fresh();
+
+        $this->assertTrue($game->recordGameResult(Seat::Guest, WinReason::Concede));
+        $this->assertFalse($stale->advanceCursor(null, true));
+
+        $game->refresh();
+        $this->assertSame(1, $game->turn_number);
+        $this->assertSame(Seat::Host, $game->active_seat);
     }
 
     public function test_a_lost_race_leaves_the_model_as_it_was(): void

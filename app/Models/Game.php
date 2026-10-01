@@ -311,6 +311,12 @@ class Game extends Model
         return $this->format->gamesToWin();
     }
 
+    /** Whether the game in progress already has its result recorded. */
+    public function currentGameDecided(): bool
+    {
+        return count($this->game_results) >= $this->game_number;
+    }
+
     public function winsFor(Seat $seat): int
     {
         return count(array_filter($this->game_results, fn (array $result) => $result['winner'] === $seat->value));
@@ -351,7 +357,7 @@ class Game extends Model
     {
         $recorded = count($this->game_results);
 
-        if ($this->status !== GameStatus::Active || $recorded >= $this->game_number) {
+        if ($this->status !== GameStatus::Active || $this->currentGameDecided()) {
             return false;
         }
 
@@ -426,8 +432,9 @@ class Game extends Model
     }
 
     /**
-     * Store a roll unless one is already stored. Returns whether this call's roll
-     * was the one kept; either way the model holds the stored roll afterwards.
+     * Store a roll unless one is already stored or the match has left play.
+     * Returns whether this call's roll was the one kept; either way the model
+     * holds the stored row afterwards.
      *
      * The conditional update settles both seats rolling at once.
      *
@@ -466,10 +473,12 @@ class Game extends Model
         ];
     }
 
-    /** Write a column only while it is still null. */
+    /** Write a column only while it is still null and the match is in play. */
     private function fillIfNull(string $column, mixed $value): bool
     {
-        return $this->fillWhere([$column => $value], fn (Builder $query) => $query->whereNull($column));
+        return $this->fillWhere([$column => $value], fn (Builder $query) => $query
+            ->where('status', GameStatus::Active)
+            ->whereNull($column));
     }
 
     /**
@@ -519,7 +528,7 @@ class Game extends Model
      * Move the cursor on the acting seat's behalf. Before the first turn this
      * opens turn 1 for the first player; after it, ending the turn hands the
      * next one to the other seat with no stop yet. Returns false when the turn
-     * changed hands since this model was read.
+     * changed hands, or a result was recorded, since this model was read.
      *
      * @throws LogicException before turn order is decided
      */
@@ -535,8 +544,11 @@ class Game extends Model
 
         $turnNumber = $this->getRawOriginal('turn_number');
         $activeSeat = $this->getRawOriginal('active_seat');
+        $recorded = count($this->game_results);
 
         return $this->fillWhere($cursor, fn (Builder $query) => $query
+            ->where('status', GameStatus::Active)
+            ->whereJsonLength('game_results', $recorded)
             ->where('turn_number', $turnNumber)
             ->where('active_seat', $activeSeat));
     }
@@ -555,10 +567,16 @@ class Game extends Model
         ];
     }
 
-    /** Whether this seat may move the cursor now. Always false for a watcher. */
+    /**
+     * Whether this seat may move the cursor now. Always false for a watcher, and
+     * for everyone once the game in progress is decided.
+     */
     public function isTurnOf(?Seat $seat): bool
     {
-        return $seat !== null && $this->status === GameStatus::Active && $seat === $this->actingSeat();
+        return $seat !== null
+            && $this->status === GameStatus::Active
+            && ! $this->currentGameDecided()
+            && $seat === $this->actingSeat();
     }
 
     /**
