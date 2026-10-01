@@ -78,6 +78,13 @@ export function stopLabel(stop: TurnStop): string {
   return `Lane ${stop.slice('contact:'.length)}`;
 }
 
+/** The contact lane a stop is in, by contact order, or null outside contact. */
+export function contactLane(turnStop: string | null): number | null {
+  const match = turnStop?.match(/^contact:([1-3])$/);
+
+  return match ? Number(match[1]) : null;
+}
+
 /** What one press does, for the button that makes it. Null when it is not your turn. */
 export function advanceLabel(cursor: TurnCursor): string | null {
   const move = next(cursor);

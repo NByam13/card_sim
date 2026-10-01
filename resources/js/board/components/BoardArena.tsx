@@ -2,7 +2,7 @@ import { Card, Deck } from '@/types/cards';
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BoardCardViewProvider, BoardFocusProvider, BoardTokensProvider } from '../context';
 import { useHoverFollowsPointer } from '../hoverTarget';
-import { MlpGameZone, MlpOutOfPlayBar } from '../mlp/MlpTable';
+import { MlpGameZone, MlpOutOfPlayBar, TableRings } from '../mlp/MlpTable';
 import { advanceLabel } from '../mlp/turnTrack';
 import { TurnCursor } from '../sync/types';
 import {
@@ -65,6 +65,7 @@ export default function BoardArena({
   turnCursor,
   goingFirst,
   opponentStarted,
+  rings,
 }: {
   deck: Deck;
   /** Card zoom factor (the board itself stays at 1×; only cards scale). */
@@ -107,6 +108,8 @@ export default function BoardArena({
   goingFirst?: boolean | null;
   /** Whether the opponent has pressed Start Game. Turn 1 waits for both boards. */
   opponentStarted?: boolean;
+  /** The turn cursor drawn on this half. Absent in solo. */
+  rings?: TableRings;
 }) {
   const { state, dispatch } = useGame(deck, savedState);
   const { message, show, toast } = useToast();
@@ -373,6 +376,7 @@ export default function BoardArena({
                 scale={scale}
                 selection={selection}
                 setSelection={setSelection}
+                rings={rings}
               />
             }
             outOfPlayBar={(hand) => (

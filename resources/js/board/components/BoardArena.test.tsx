@@ -315,3 +315,29 @@ describe('BoardArena, in a match', () => {
     });
   });
 });
+
+describe('BoardArena, the turn rings', () => {
+  const half = () => screen.getByText('Scene Zone').closest('[class*="rounded-xl"]') as HTMLElement;
+
+  it('rings your half and the lane in contact while you act', () => {
+    render(
+      <BoardArena
+        deck={deck}
+        scale={1}
+        savedState={boardWithRetiredCard()}
+        rings={{ acting: true, contactLane: 2 }}
+      />
+    );
+
+    expect(half().className).toContain('ring-emerald');
+    expect(screen.getByText('Lane 2').closest('[class*="rounded-lg"]')?.className).toContain(
+      'ring-amber'
+    );
+  });
+
+  it('draws no rings in solo', () => {
+    render(<BoardArena deck={deck} scale={1} savedState={boardWithRetiredCard()} />);
+
+    expect(half().className).not.toContain('ring-emerald');
+  });
+});

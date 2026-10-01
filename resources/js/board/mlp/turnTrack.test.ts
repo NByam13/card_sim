@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TurnCursor } from '../sync/types';
 import {
   advanceLabel,
+  contactLane,
   CursorMove,
   displayStops,
   FIRST_CONTACT_TURN,
@@ -173,5 +174,18 @@ describe('displayStops', () => {
     expect(displayStops(FIRST_CONTACT_TURN, 'main').find((s) => s.key === 'contact')?.locked).toBe(
       false
     );
+  });
+});
+
+describe('contactLane', () => {
+  it('reads the lane out of a contact stop', () => {
+    expect(contactLane('contact:1')).toBe(1);
+    expect(contactLane('contact:3')).toBe(3);
+  });
+
+  it('is null outside contact, and for a lane the track does not have', () => {
+    expect(contactLane(null)).toBeNull();
+    expect(contactLane('main')).toBeNull();
+    expect(contactLane('contact:4')).toBeNull();
   });
 });

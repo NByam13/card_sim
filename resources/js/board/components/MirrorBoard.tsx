@@ -6,7 +6,7 @@ import {
   BoardZoomProvider,
   CardBacks,
 } from '../context';
-import { MlpGameZone } from '../mlp/MlpTable';
+import { MlpGameZone, TableRings } from '../mlp/MlpTable';
 import { EMPTY_SELECTION } from '../selection';
 import { MirrorState } from '../sync/hydrate';
 import MirrorRetire from './MirrorRetire';
@@ -31,6 +31,7 @@ export default function MirrorBoard({
   name,
   present,
   goingFirst,
+  rings,
 }: {
   state: MirrorState | null;
   scale: number;
@@ -42,6 +43,7 @@ export default function MirrorBoard({
   present: boolean;
   /** Whether the opponent is on the play, which numbers their lanes. Null until decided. */
   goingFirst: boolean | null;
+  rings?: TableRings;
 }) {
   if (!state) {
     return (
@@ -84,6 +86,7 @@ export default function MirrorBoard({
                 selection={EMPTY_SELECTION}
                 setSelection={() => {}}
                 mirrored
+                rings={rings}
               />
             </div>
           </BoardDispatchProvider>
