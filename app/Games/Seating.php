@@ -2,6 +2,7 @@
 
 namespace App\Games;
 
+use App\Enums\GameStatus;
 use App\Enums\Seat;
 use App\Events\SeatClaimed;
 use App\Models\Game;
@@ -28,7 +29,7 @@ final class Seating
 
         $game = Game::create([
             'setup' => $setup,
-            'status' => 'waiting',
+            'status' => GameStatus::Waiting,
             'host_token_hash' => Game::hashToken($token),
             'host_name' => $name,
             'host_deck_code' => $deckCode,
@@ -56,14 +57,14 @@ final class Seating
         $token = Game::newToken();
 
         $claimed = Game::whereKey($game->id)
-            ->where('status', 'waiting')
+            ->where('status', GameStatus::Waiting)
             ->whereNull('guest_token_hash')
             ->update([
                 'guest_token_hash' => Game::hashToken($token),
                 'guest_name' => $name,
                 'guest_deck_code' => $deckCode,
                 'guest_deck' => json_encode($deck),
-                'status' => 'active',
+                'status' => GameStatus::Active,
                 // Joining is itself accepting: this seat has no board yet, so
                 // there is nothing for a match to start underneath. Only a seat
                 // already playing alone gets asked.

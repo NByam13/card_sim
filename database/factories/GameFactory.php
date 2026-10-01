@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\GameStatus;
 use App\Enums\Seat;
 use App\Games\Seating;
 use App\Models\Game;
@@ -25,7 +26,7 @@ class GameFactory extends Factory
     {
         return [
             'setup' => 'mlp',
-            'status' => 'waiting',
+            'status' => GameStatus::Waiting,
             'host_token_hash' => Game::hashToken(Game::newToken()),
             'host_name' => 'Host',
             'host_deck_code' => Str::lower(Str::random(12)),
@@ -52,7 +53,7 @@ class GameFactory extends Factory
             'guest_name' => 'Guest',
             'guest_deck_code' => Str::lower(Str::random(12)),
             'guest_deck' => self::deck('Guest deck'),
-            'status' => 'active',
+            'status' => GameStatus::Active,
             'guest_accepted_at' => now(),
         ]);
     }
@@ -65,7 +66,7 @@ class GameFactory extends Factory
 
     public function finished(): static
     {
-        return $this->state(fn () => ['status' => 'finished']);
+        return $this->state(fn () => ['status' => GameStatus::Finished]);
     }
 
     /** The dice rolled, with the winner yet to elect who goes first. */

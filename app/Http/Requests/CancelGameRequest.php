@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\GameStatus;
 use App\Enums\Seat;
 use App\Games\Participant;
 use App\Models\Game;
@@ -21,7 +22,7 @@ class CancelGameRequest extends FormRequest
             return Response::deny('Only the host can cancel this game.');
         }
 
-        return $game->status === 'waiting' ? Response::allow() : Response::deny('This game has already started.');
+        return $game->status === GameStatus::Waiting ? Response::allow() : Response::deny('This game has already started.');
     }
 
     /** @return array<string, mixed> */

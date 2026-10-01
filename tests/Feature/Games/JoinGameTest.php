@@ -44,7 +44,7 @@ class JoinGameTest extends TestCase
             ->assertRedirect("/games/{$game->code}");
 
         $game->refresh();
-        $this->assertSame('active', $game->status);
+        $this->assertSame('active', $game->status->value);
         $this->assertSame('Sam', $game->guest_name);
         $this->assertSame('Guest deck', $game->deckNameFor(Seat::Guest));
     }
@@ -101,7 +101,7 @@ class JoinGameTest extends TestCase
 
         $game->refresh();
         $this->assertNull($game->guest_token_hash);
-        $this->assertSame('waiting', $game->status);
+        $this->assertSame('waiting', $game->status->value);
     }
 
     public function test_the_second_of_two_simultaneous_joins_is_refused(): void

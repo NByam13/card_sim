@@ -41,7 +41,7 @@ class OpenGameTest extends TestCase
         $game = Game::sole();
         $response->assertRedirect("/games/{$game->code}");
 
-        $this->assertSame('waiting', $game->status);
+        $this->assertSame('waiting', $game->status->value);
         $this->assertSame('mlp', $game->setup);
         $this->assertSame('Nick', $game->host_name);
         $this->assertSame('abcdef123456', $game->host_deck_code);

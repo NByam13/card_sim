@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\GameStatus;
 use App\Enums\Seat;
 use App\Games\Participant;
 use App\Models\Game;
@@ -29,7 +30,7 @@ class ActiveSeatRequest extends FormRequest
             return Response::deny($this->notSeated);
         }
 
-        if ($this->game()->status !== 'active') {
+        if ($this->game()->status !== GameStatus::Active) {
             return Response::deny($this->notActive);
         }
 
