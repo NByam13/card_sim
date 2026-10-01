@@ -33,6 +33,7 @@ export default function SeamBar({
   onAdvance,
   waiting,
   away = [],
+  onClaimWin,
 }: {
   /** Null for a watcher. */
   seat: Seat | null;
@@ -44,6 +45,8 @@ export default function SeamBar({
   waiting?: string;
   /** Seats whose browser has left the channel. Their mirror is frozen, not thinking. */
   away?: Seat[];
+  /** Reopens the Stage IV claim, while this seat's Main Character stands there. */
+  onClaimWin?: () => void;
 }) {
   const nameOf = (which: Seat) => (which === seat ? 'You' : names[which]);
   const { first_player } = turnOrder;
@@ -68,11 +71,14 @@ export default function SeamBar({
       presence={presence}
       caption={`Turn ${turnNumber} · ${nameOf(acting)}`}
       action={
-        label && onAdvance ? (
-          <Button onClick={onAdvance}>{label}</Button>
-        ) : (
-          waiting && <Note>{waiting}</Note>
-        )
+        <>
+          {onClaimWin && <Button onClick={onClaimWin}>Claim win</Button>}
+          {label && onAdvance ? (
+            <Button onClick={onAdvance}>{label}</Button>
+          ) : (
+            waiting && <Note>{waiting}</Note>
+          )}
+        </>
       }
     >
       <ol aria-label="Turn stops" className="flex items-center">

@@ -3,6 +3,7 @@
 use App\Http\Controllers\BoardSyncController;
 use App\Http\Controllers\CardController;
 use App\Http\Controllers\GameController;
+use App\Http\Controllers\GameResultController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\TurnCursorController;
 use App\Http\Controllers\TurnOrderController;
@@ -35,6 +36,8 @@ Route::post('/games/{game}/state', [BoardSyncController::class, 'save'])->name('
 Route::post('/games/{game}/turn-order/roll', [TurnOrderController::class, 'roll'])->name('games.turn-order.roll');
 Route::post('/games/{game}/turn-order/elect', [TurnOrderController::class, 'elect'])->name('games.turn-order.elect');
 Route::post('/games/{game}/cursor', [TurnCursorController::class, 'advance'])->name('games.cursor');
+
+Route::post('/games/{game}/claim-win', [GameResultController::class, 'claim'])->name('games.claim-win');
 
 // Cards a mirror meets that its own deck does not carry. `where` so a number
 // containing a dot still routes. Throttled because the number space is open and
