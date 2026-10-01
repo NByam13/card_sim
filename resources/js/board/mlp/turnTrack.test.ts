@@ -5,6 +5,7 @@ import {
   contactLane,
   CursorMove,
   displayStops,
+  drawsOnTurnStart,
   FIRST_CONTACT_TURN,
   next,
   previous,
@@ -118,6 +119,21 @@ describe('startsTurn', () => {
     expect(startsTurn(cursor(), { turn_stop: 'main' })).toBe(true);
     expect(startsTurn(cursor({ turn_stop: 'main' }), { turn_stop: 'contact:1' })).toBe(false);
     expect(startsTurn(cursor({ turn_stop: 'end' }), { ends_turn: true })).toBe(false);
+  });
+});
+
+describe('drawsOnTurnStart', () => {
+  it('skips the draw on turn 1, which the player on the play opens', () => {
+    expect(drawsOnTurnStart(cursor({ turn_number: 0, active_seat: null }))).toBe(false);
+  });
+
+  it('draws for the other seat on its first turn', () => {
+    expect(drawsOnTurnStart(cursor({ turn_number: 2, active_seat: 'guest' }))).toBe(true);
+  });
+
+  it('draws on every later turn, for either seat', () => {
+    expect(drawsOnTurnStart(cursor({ turn_number: 3, active_seat: 'host' }))).toBe(true);
+    expect(drawsOnTurnStart(cursor({ turn_number: 4, active_seat: 'guest' }))).toBe(true);
   });
 });
 

@@ -75,7 +75,18 @@ describe('useTurnCursor', () => {
     expect(onTurnStart).not.toHaveBeenCalled();
     await response.settle({ turn_number: 3, active_seat: 'host', turn_stop: 'main' });
 
-    expect(onTurnStart).toHaveBeenCalledOnce();
+    expect(onTurnStart).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it('starts turn 1 without a draw', async () => {
+    const { result } = mount(served({ turn_number: 0, active_seat: null }));
+    const onTurnStart = vi.fn();
+    const response = pending();
+
+    act(() => result.current.advance(onTurnStart));
+    await response.settle({ turn_number: 1, active_seat: 'host', turn_stop: 'main' });
+
+    expect(onTurnStart).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   it('does not start the local turn for any other move', async () => {

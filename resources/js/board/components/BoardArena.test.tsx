@@ -214,7 +214,7 @@ describe('BoardArena, in a match', () => {
     );
 
     const latest = (): GameState => onState.mock.lastCall?.[0] as GameState;
-    const startTurn = () => act(() => turnCursor.advance.mock.lastCall?.[0]());
+    const startTurn = (draw = true) => act(() => turnCursor.advance.mock.lastCall?.[0](draw));
 
     return { latest, turnCursor, startTurn };
   }
@@ -312,6 +312,17 @@ describe('BoardArena, in a match', () => {
 
       expect(turnCursor.advance).toHaveBeenCalledOnce();
       expect(screen.getByRole('button', { name: 'Start turn' })).toBeEnabled();
+    });
+
+    it('starts turn 1 without a draw when told to', () => {
+      const { latest, startTurn } = matchArena({ cursor: opening });
+      const before = latest();
+
+      fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+      startTurn(false);
+
+      expect(latest().turn).toBe(before.turn + 1);
+      expect(latest().zones.hand).toHaveLength(before.zones.hand.length);
     });
   });
 });

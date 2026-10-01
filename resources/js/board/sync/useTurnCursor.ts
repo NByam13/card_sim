@@ -1,7 +1,7 @@
 import { advance as advanceRoute } from '@/actions/App/Http/Controllers/TurnCursorController';
 import { router } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CursorMove, next, previous, startsTurn } from '../mlp/turnTrack';
+import { CursorMove, drawsOnTurnStart, next, previous, startsTurn } from '../mlp/turnTrack';
 import { Seat, TurnCursor, WireCursor } from './types';
 import { postJson } from './useGameSync';
 
@@ -28,8 +28,11 @@ export function useTurnCursor({
   cursor: TurnCursor;
   /** A cursor from the channel. */
   receive: (cursor: WireCursor) => void;
-  /** One press forward. `onTurnStart` runs once the server has accepted a move that starts the turn. */
-  advance: (onTurnStart: () => void) => void;
+  /**
+   * One press forward. `onTurnStart` runs once the server has accepted a move
+   * that starts the turn, told whether that turn draws.
+   */
+  advance: (onTurnStart: (draw: boolean) => void) => void;
   stepBack: () => void;
 } {
   const [cursor, setCursor] = useState(served);
@@ -80,9 +83,13 @@ export function useTurnCursor({
   );
 
   const advance = useCallback(
-    (onTurnStart: () => void) => {
-      const move = next(latest.current);
-      send(move, move && startsTurn(latest.current, move) ? onTurnStart : undefined);
+    (onTurnStart: (draw: boolean) => void) => {
+      const from = latest.current;
+      const move = next(from);
+      send(
+        move,
+        move && startsTurn(from, move) ? () => onTurnStart(drawsOnTurnStart(from)) : undefined
+      );
     },
     [send]
   );

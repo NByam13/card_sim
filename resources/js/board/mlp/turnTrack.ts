@@ -70,6 +70,11 @@ export function startsTurn(cursor: TurnCursor, move: CursorMove): boolean {
   return cursor.turn_stop === null && 'turn_stop' in move;
 }
 
+/** Whether the turn a press from this cursor starts draws. The player on the play skips it on turn 1. */
+export function drawsOnTurnStart(cursor: TurnCursor): boolean {
+  return trackTurn(cursor) > 1;
+}
+
 /** A stop's name on the seam bar. */
 export function stopLabel(stop: TurnStop): string {
   if (stop === 'main') return 'Main';
