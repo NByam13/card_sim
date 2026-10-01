@@ -1,9 +1,10 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { Seat } from '@/types/game';
+import { MatchFormat, Seat } from '@/types/game';
 import { TurnCursor, TurnOrder } from '../sync/types';
 import SeamBar from './SeamBar';
+import { MatchScore } from './WinClaimModal';
 
 const names: Record<Seat, string> = { host: 'Twilight', guest: 'Rarity' };
 
@@ -182,6 +183,49 @@ describe('SeamBar', () => {
 
       expect(screen.getAllByText('Away')).toHaveLength(2);
       expect(screen.getByText('Twilight')).toBeTruthy();
+    });
+  });
+
+  describe('the score', () => {
+    const bo3: MatchScore = {
+      format: MatchFormat.Bo3,
+      game_number: 2,
+      games_to_win: 2,
+      wins: { host: 1, guest: 0 },
+    };
+
+    it.each([
+      ['before the roll', { roll: null, first_player: null }],
+      ['mid-turn', decided],
+    ])('shows a Bo3 from your side of the table %s', (_, turnOrder: TurnOrder) => {
+      render(
+        <SeamBar seat="guest" names={names} cursor={cursor()} turnOrder={turnOrder} score={bo3} />
+      );
+
+      const score = screen.getByLabelText('Score');
+      expect(score.textContent).toBe('You0–1TwilightFirst to 2');
+    });
+
+    it('shows a watcher the host first', () => {
+      render(
+        <SeamBar seat={null} names={names} cursor={cursor()} turnOrder={decided} score={bo3} />
+      );
+
+      expect(screen.getByLabelText('Score').textContent).toBe('Twilight1–0RarityFirst to 2');
+    });
+
+    it('leaves a Bo1 without one', () => {
+      render(
+        <SeamBar
+          seat="host"
+          names={names}
+          cursor={cursor()}
+          turnOrder={decided}
+          score={{ ...bo3, format: MatchFormat.Bo1, games_to_win: 1, wins: { host: 0, guest: 0 } }}
+        />
+      );
+
+      expect(screen.queryByLabelText('Score')).toBeNull();
     });
   });
 });

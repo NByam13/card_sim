@@ -21,6 +21,8 @@ class TurnOrderController extends Controller
             TurnOrderRolled::dispatch($game);
         }
 
+        abort_if($game->turn_order_roll === null, 403, 'This match is not in play.');
+
         return response()->json(['roll' => $game->turn_order_roll]);
     }
 

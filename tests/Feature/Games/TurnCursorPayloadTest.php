@@ -98,6 +98,17 @@ class TurnCursorPayloadTest extends TestCase
             ->assertInertia(fn ($page) => $page->where('cursor.my_turn', false));
     }
 
+    public function test_nobody_holds_the_turn_once_a_bo3_game_is_decided(): void
+    {
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->bo3()->turnOrderDecided()->onTurn(3, Seat::Guest)
+            ->state(['game_results' => [['game' => 1, 'winner' => 'host', 'reason' => 'story']]])
+            ->create();
+
+        $this->as(Seat::Guest, $game)
+            ->get("/games/{$game->code}")
+            ->assertInertia(fn ($page) => $page->where('game.status', 'active')->where('cursor.my_turn', false));
+    }
+
     public function test_a_partial_reload_returns_only_the_cursor(): void
     {
         $game = $this->midTurn();

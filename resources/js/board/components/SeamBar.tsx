@@ -1,7 +1,8 @@
 import { Fragment, ReactNode } from 'react';
 import { advanceLabel, displayStops, trackTurn } from '../mlp/turnTrack';
-import { Seat } from '@/types/game';
+import { MatchFormat, opposingSeat, Seat } from '@/types/game';
 import { TurnCursor, TurnOrder } from '../sync/types';
+import { MatchScore } from './WinClaimModal';
 
 const BUTTON =
   'rounded-full bg-emerald-600 px-3 py-0.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700';
@@ -10,6 +11,9 @@ const CAPTION = 'text-[10px] font-semibold tracking-wide whitespace-nowrap text-
 
 const AWAY =
   'rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-800 uppercase';
+
+const SCORE_CHIP =
+  'min-w-5 rounded-md bg-emerald-600 px-1.5 text-center font-semibold text-white tabular-nums shadow-sm';
 
 const STOP_BASE = 'rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase';
 const STOP_CURRENT = `${STOP_BASE} bg-emerald-600 text-white shadow-sm`;
@@ -22,8 +26,8 @@ const STOP_LOCKED = `${STOP_BASE} text-gray-300`;
  * stop the cursor is on. Turn order itself is decided in `TurnOrderModal`.
  * A watcher gets the same bar with no actions.
  *
- * Ported from PonyRec's seam and `PhaseIndicator`. The left cell says which
- * seats presence has seen leave; the clocks will join it.
+ * Ported from PonyRec's seam and `PhaseIndicator`. The left cell carries a
+ * Bo3's score and which seats presence has seen leave; the clocks will join it.
  */
 export default function SeamBar({
   seat,
@@ -33,6 +37,7 @@ export default function SeamBar({
   onAdvance,
   waiting,
   away = [],
+  score,
   onClaimWin,
 }: {
   /** Null for a watcher. */
@@ -45,12 +50,18 @@ export default function SeamBar({
   waiting?: string;
   /** Seats whose browser has left the channel. Their mirror is frozen, not thinking. */
   away?: Seat[];
+  score?: MatchScore;
   /** Reopens the Stage IV claim, while this seat's Main Character stands there. */
   onClaimWin?: () => void;
 }) {
   const nameOf = (which: Seat) => (which === seat ? 'You' : names[which]);
   const { first_player } = turnOrder;
-  const presence = <Away seats={away} names={names} />;
+  const presence = (
+    <>
+      {score?.format === MatchFormat.Bo3 && <Score score={score} seat={seat} nameOf={nameOf} />}
+      <Away seats={away} names={names} />
+    </>
+  );
 
   if (!first_player) {
     return (
@@ -126,7 +137,7 @@ function Bar({
       aria-label="Turn"
       className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg bg-slate-100 px-3 py-1 text-xs"
     >
-      <div className="flex items-center gap-2">{presence}</div>
+      <div className="flex items-center gap-3">{presence}</div>
       <div className="flex items-center gap-2">
         <span className={CAPTION}>{caption}</span>
         <div className="flex items-center rounded-full bg-white/70 px-1 py-0.5 ring-1 ring-gray-200">
@@ -135,6 +146,36 @@ function Bar({
       </div>
       <div className="flex items-center justify-end gap-2">{action}</div>
     </section>
+  );
+}
+
+function Score({
+  score,
+  seat,
+  nameOf,
+}: {
+  score: MatchScore;
+  seat: Seat | null;
+  nameOf: (which: Seat) => string;
+}) {
+  const left = seat ?? Seat.Host;
+  const right = opposingSeat(left);
+
+  return (
+    <span aria-label="Score" className="flex items-center gap-2">
+      <span className="flex items-center gap-2 rounded-full bg-white/70 px-2.5 py-0.5 ring-1 ring-gray-200">
+        <span className="font-medium text-gray-700">{nameOf(left)}</span>
+        <span className="flex items-center gap-1">
+          <span className={SCORE_CHIP}>{score.wins[left]}</span>
+          <span aria-hidden className="text-gray-400">
+            –
+          </span>
+          <span className={SCORE_CHIP}>{score.wins[right]}</span>
+        </span>
+        <span className="font-medium text-gray-700">{nameOf(right)}</span>
+      </span>
+      <span className={CAPTION}>First to {score.games_to_win}</span>
+    </span>
   );
 }
 

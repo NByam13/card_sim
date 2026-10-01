@@ -266,7 +266,7 @@ function Playing({
     onTurnOrderDecided: order.receiveDecided,
     onGameFinished: useCallback((result: GameFinishedPayload) => {
       setFinished(result);
-      router.reload({ only: ['game'] });
+      router.reload({ only: ['game', 'cursor'] });
     }, []),
     // Presence cannot tell a watcher from the player who just sat down, and the
     // props this page is holding predate the claim either way.
@@ -383,6 +383,7 @@ function Playing({
                       onAdvance={onAdvance}
                       waiting={waiting}
                       away={opponentPresent === false ? [opponent] : []}
+                      score={game}
                       onClaimWin={winClaim.claimable ? winClaim.open : undefined}
                     />
                   </div>

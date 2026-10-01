@@ -19,6 +19,10 @@ class AdvanceCursorRequest extends ActiveSeatRequest
             return Response::deny('Turn order is not decided yet.');
         }
 
+        if ($game->currentGameDecided()) {
+            return Response::deny('This game has already been decided.');
+        }
+
         return $seat === $game->actingSeat() ? Response::allow() : Response::deny('It is not your turn.');
     }
 
