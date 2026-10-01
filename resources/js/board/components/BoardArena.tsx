@@ -97,8 +97,8 @@ export default function BoardArena({
    */
   turnCursor?: {
     cursor: TurnCursor;
-    /** Runs `onTurnStart` once the press that starts the turn is accepted. */
-    advance: (onTurnStart: () => void) => void;
+    /** Runs `onTurnStart` once the press that starts the turn is accepted, told whether it draws. */
+    advance: (onTurnStart: (draw: boolean) => void) => void;
     stepBack: () => void;
   };
   /**
@@ -207,11 +207,11 @@ export default function BoardArena({
     dispatch({ type: 'DRAW', n: 1 });
   };
 
-  const nextTurn = () => {
-    if (state.zones.library.length === 0) {
+  const nextTurn = (draw = true) => {
+    if (draw && state.zones.library.length === 0) {
       toast('Main Deck empty — you would lose in a real game');
     }
-    dispatch({ type: 'NEXT_TURN' });
+    dispatch({ type: 'NEXT_TURN', draw });
   };
 
   // The turn start runs after a round trip, so it must read the board as it is then.
@@ -230,9 +230,9 @@ export default function BoardArena({
   const matchAdvance = turnCursor && !waitingOn ? advanceLabel(turnCursor.cursor) : null;
   const nextTurnLabel = !turnCursor ? 'Next Turn' : (waitingOn ?? matchAdvance ?? 'Not your turn');
   const advanceTurn = !turnCursor
-    ? nextTurn
+    ? () => nextTurn()
     : () => {
-        if (!waitingOn) turnCursor.advance(() => nextTurnRef.current());
+        if (!waitingOn) turnCursor.advance((draw) => nextTurnRef.current(draw));
       };
 
   const revealScene = () => {
