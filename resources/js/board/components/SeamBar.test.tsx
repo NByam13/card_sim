@@ -177,4 +177,46 @@ describe('SeamBar', () => {
       expect(screen.queryByRole('button')).toBeNull();
     });
   });
+
+  describe('presence', () => {
+    it.each([
+      ['before the roll', { roll: null, first_player: null }],
+      ['during the election', rolled],
+      ['mid-turn', decided],
+    ])('marks an away seat against its name %s', (_, turnOrder: TurnOrder) => {
+      render(
+        <SeamBar
+          seat="host"
+          names={names}
+          cursor={cursor()}
+          turnOrder={turnOrder}
+          away={['guest']}
+        />
+      );
+
+      const bar = screen.getByRole('region', { name: 'Turn' });
+      expect(within(bar).getByText('Away').previousSibling?.textContent).toBe('Rarity');
+    });
+
+    it('marks no one away while everyone is here', () => {
+      render(<SeamBar seat="host" names={names} cursor={cursor()} turnOrder={decided} />);
+
+      expect(screen.queryByText('Away')).toBeNull();
+    });
+
+    it('marks every seat that is gone, for a watcher', () => {
+      render(
+        <SeamBar
+          seat={null}
+          names={names}
+          cursor={cursor()}
+          turnOrder={decided}
+          away={['host', 'guest']}
+        />
+      );
+
+      expect(screen.getAllByText('Away')).toHaveLength(2);
+      expect(screen.getByText('Twilight')).toBeTruthy();
+    });
+  });
 });

@@ -326,6 +326,7 @@ function Playing({
                       onElect={order.elect}
                       onAdvance={onAdvance}
                       waiting={waiting}
+                      away={opponentPresent === false ? [opponent] : []}
                     />
                   </div>
                 )
@@ -341,7 +342,7 @@ function Playing({
                     onScaleChange={setMirrorScale}
                     backs={deck.card_backs ?? null}
                     name={opponentName}
-                    present={opponentPresent}
+                    present={opponentPresent !== false}
                     goingFirst={firstPlayer ? firstPlayer !== seat : null}
                     rings={{ acting: acting === opponent, contactLane: lane }}
                   />

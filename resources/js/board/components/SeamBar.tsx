@@ -12,6 +12,9 @@ const SECONDARY_BUTTON =
 
 const CAPTION = 'text-[10px] font-semibold tracking-wide whitespace-nowrap text-gray-500 uppercase';
 
+const AWAY =
+  'rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-800 uppercase';
+
 const STOP_BASE = 'rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase';
 const STOP_CURRENT = `${STOP_BASE} bg-emerald-600 text-white shadow-sm`;
 const STOP_SPENT = `${STOP_BASE} text-gray-400`;
@@ -25,8 +28,8 @@ const opposing = (seat: Seat): Seat => (seat === 'host' ? 'guest' : 'host');
  * turn number, whose turn it is and the stop the cursor is on.
  * A watcher gets the same bar with no actions.
  *
- * Ported from PonyRec's seam and `PhaseIndicator`. The left cell is empty until
- * presence and the clocks arrive.
+ * Ported from PonyRec's seam and `PhaseIndicator`. The left cell says which
+ * seats presence has seen leave; the clocks will join it.
  */
 export default function SeamBar({
   seat,
@@ -37,6 +40,7 @@ export default function SeamBar({
   onElect,
   onAdvance,
   waiting,
+  away = [],
 }: {
   /** Null for a watcher. */
   seat: Seat | null;
@@ -48,13 +52,17 @@ export default function SeamBar({
   onAdvance?: () => void;
   /** Why the turn cannot move yet, shown in place of the advance button. */
   waiting?: string;
+  /** Seats whose browser has left the channel. Their mirror is frozen, not thinking. */
+  away?: Seat[];
 }) {
   const nameOf = (which: Seat) => (which === seat ? 'You' : names[which]);
   const { roll, first_player } = turnOrder;
+  const presence = <Away seats={away} names={names} />;
 
   if (!roll) {
     return (
       <Bar
+        presence={presence}
         caption="Turn order"
         action={seat && onRoll ? <Button onClick={onRoll}>Roll</Button> : null}
       >
@@ -70,6 +78,7 @@ export default function SeamBar({
 
     return (
       <Bar
+        presence={presence}
         caption={`${nameOf(roll.winner)} won the roll`}
         action={
           choosing && onElect ? (
@@ -97,6 +106,7 @@ export default function SeamBar({
 
   return (
     <Bar
+      presence={presence}
       caption={`Turn ${turnNumber} · ${nameOf(acting)}`}
       action={
         label && onAdvance ? (
@@ -136,10 +146,12 @@ export default function SeamBar({
 }
 
 function Bar({
+  presence,
   caption,
   action,
   children,
 }: {
+  presence: ReactNode;
   caption: string;
   action: ReactNode;
   children: ReactNode;
@@ -149,7 +161,7 @@ function Bar({
       aria-label="Turn"
       className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg bg-slate-100 px-3 py-1 text-xs"
     >
-      <div />
+      <div className="flex items-center gap-2">{presence}</div>
       <div className="flex items-center gap-2">
         <span className={CAPTION}>{caption}</span>
         <div className="flex items-center rounded-full bg-white/70 px-1 py-0.5 ring-1 ring-gray-200">
@@ -159,6 +171,15 @@ function Bar({
       <div className="flex items-center justify-end gap-2">{action}</div>
     </section>
   );
+}
+
+function Away({ seats, names }: { seats: Seat[]; names: Record<Seat, string> }) {
+  return seats.map((which) => (
+    <span key={which} className="flex items-center gap-1.5 text-gray-700">
+      <span className="font-medium">{names[which]}</span>
+      <span className={AWAY}>Away</span>
+    </span>
+  ));
 }
 
 function Note({ children }: { children: ReactNode }) {
