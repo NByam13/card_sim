@@ -6,6 +6,7 @@ use App\Enums\GameStatus;
 use App\Enums\Seat;
 use App\Events\GameCancelled;
 use App\Events\MatchAccepted;
+use App\Events\MatchFormatChanged;
 use App\Games\Participant;
 use App\Games\ParticipantSession;
 use App\Games\PonyRec\DeckClient;
@@ -13,6 +14,7 @@ use App\Games\PonyRec\DeckImportFailed;
 use App\Games\Seating;
 use App\Http\Requests\AcceptMatchRequest;
 use App\Http\Requests\CancelGameRequest;
+use App\Http\Requests\ChangeMatchFormatRequest;
 use App\Http\Requests\ClaimSeatRequest;
 use App\Models\Game;
 use Illuminate\Http\RedirectResponse;
@@ -71,6 +73,7 @@ class GameController extends Controller
             // The same rule `destroy()` enforces, so the button is only ever
             // offered where the request behind it would be allowed.
             'canCancel' => $seat === Seat::Host && $game->status === GameStatus::Waiting,
+            'canChangeFormat' => $seat === Seat::Host && ! $game->formatLocked(),
         ]);
     }
 
@@ -126,6 +129,18 @@ class GameController extends Controller
         return to_route('games.show', $game);
     }
 
+    /** Choose Bo1 or Bo3. Host only, until the match is live. */
+    public function format(Game $game, ChangeMatchFormatRequest $request): RedirectResponse
+    {
+        if (! $game->changeFormat($request->matchFormat())) {
+            return back()->withErrors(['format' => 'The match format is locked.']);
+        }
+
+        MatchFormatChanged::dispatch($game);
+
+        return back();
+    }
+
     /** Cancel a game nobody joined. Host only, and only while waiting. */
     public function destroy(Game $game, CancelGameRequest $request): RedirectResponse
     {
@@ -157,6 +172,7 @@ class GameController extends Controller
             'code' => $game->code,
             'setup' => $game->setup,
             'status' => $game->status,
+            'format' => $game->format,
             'seats' => [
                 Seat::Host->value => [
                     'name' => $game->nameFor(Seat::Host),

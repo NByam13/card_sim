@@ -88,11 +88,11 @@ class GameMatchFormatTest extends TestCase
         $this->assertSame(Seat::Host, $game->winner_seat);
     }
 
-    public function test_the_format_is_open_until_turn_order_is_decided(): void
+    public function test_the_format_is_open_until_the_match_is_live(): void
     {
+        $this->assertFalse(Game::factory()->make()->formatLocked());
         $this->assertFalse($this->seated()->make()->formatLocked());
-        $this->assertFalse($this->seated()->turnOrderRolled()->make()->formatLocked());
-        $this->assertTrue($this->seated()->turnOrderDecided()->make()->formatLocked());
+        $this->assertTrue($this->seated()->matchLive()->make()->formatLocked());
     }
 
     public function test_the_format_is_locked_from_game_two_and_once_finished(): void

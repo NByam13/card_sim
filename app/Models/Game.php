@@ -315,13 +315,29 @@ class Game extends Model
         return count(array_filter($this->game_results, fn (array $result) => $result['winner'] === $seat->value));
     }
 
-    /**
-     * Whether the format can no longer change: once game 1's turn order is
-     * decided, which is what mounts the board.
-     */
+    /** Whether the format can no longer change: once the match is live. */
     public function formatLocked(): bool
     {
-        return $this->status === GameStatus::Finished || $this->game_number > 1 || $this->turnOrderDecided();
+        return $this->status === GameStatus::Finished || $this->game_number > 1 || $this->matchIsLive();
+    }
+
+    /**
+     * Change the format unless it has locked since this model was read. Returns
+     * whether the change was kept.
+     *
+     * Guarded on acceptance, so a change racing the second seat's accept cannot
+     * land after the match went live.
+     */
+    public function changeFormat(MatchFormat $format): bool
+    {
+        if ($this->formatLocked()) {
+            return false;
+        }
+
+        return $this->fillWhere(['format' => $format], fn (Builder $query) => $query
+            ->where('status', '!=', GameStatus::Finished)
+            ->where('game_number', 1)
+            ->where(fn (Builder $query) => $query->whereNull('host_accepted_at')->orWhereNull('guest_accepted_at')));
     }
 
     /**
