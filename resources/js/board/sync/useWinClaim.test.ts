@@ -106,6 +106,18 @@ describe('useWinClaim', () => {
     expect(result.current.prompting).toBe(false);
   });
 
+  it('does not reopen a prompt the game ended under once the next game is undecided', () => {
+    const { result, rerender } = mount();
+    act(() => result.current.watch(board('storyIV')));
+    expect(result.current.prompting).toBe(true);
+
+    rerender({ enabled: false });
+    rerender({ enabled: true });
+
+    expect(result.current.prompting).toBe(false);
+    expect(result.current.claimable).toBe(true);
+  });
+
   it('clears a refused claim’s error when the Main Character arrives again', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     posted.mockRejectedValueOnce(new Error('409'));

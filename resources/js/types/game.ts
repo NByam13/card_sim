@@ -30,3 +30,11 @@ export const MatchFormat = {
 } as const;
 
 export type MatchFormat = (typeof MatchFormat)[keyof typeof MatchFormat];
+
+/** How a game was won. Mirrors `app/Enums/WinReason.php`; keep the two in step. */
+export const WinReason = {
+  Story: 'story',
+  Concede: 'concede',
+} as const;
+
+export type WinReason = (typeof WinReason)[keyof typeof WinReason];

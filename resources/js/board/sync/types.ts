@@ -1,4 +1,4 @@
-import { Seat } from '@/types/game';
+import { GameStatus, Seat, WinReason } from '@/types/game';
 import { ALL_ZONES, ZoneId } from '../types';
 
 /**
@@ -47,6 +47,20 @@ export interface WireCursor {
 /** The cursor as one viewer sees it, with whether it is theirs to move. */
 export interface TurnCursor extends WireCursor {
   my_turn: boolean;
+}
+
+/** One game's recorded result. */
+export interface GameResult {
+  game: number;
+  winner: Seat;
+  reason: WinReason;
+}
+
+/** A game was recorded, as the server broadcasts it. `winner_seat` is set once the match is over. */
+export interface GameFinishedPayload {
+  status: GameStatus;
+  game_results: GameResult[];
+  winner_seat: Seat | null;
 }
 
 /** The dice for turn order. Ties are rerolled, so the two totals always differ. */

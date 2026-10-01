@@ -1,5 +1,7 @@
 import { accept, destroy } from '@/actions/App/Http/Controllers/GameController';
 import BoardArena from '@/board/components/BoardArena';
+import ConcedeModal from '@/board/components/ConcedeModal';
+import GameFinishedModal from '@/board/components/GameFinishedModal';
 import MatchFormatToggle from '@/components/MatchFormatToggle';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
@@ -8,8 +10,9 @@ import TurnOrderModal from '@/board/components/TurnOrderModal';
 import WinClaimModal, { MatchScore } from '@/board/components/WinClaimModal';
 import { contactLane } from '@/board/mlp/turnTrack';
 import { CompactGameState, expandState } from '@/board/sync/persist';
-import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
+import { GameFinishedPayload, PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
 import { useBoardRelay } from '@/board/sync/useBoardRelay';
+import { useConcede } from '@/board/sync/useConcede';
 import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
 import { useMirror } from '@/board/sync/useMirror';
 import { useTurnCursor } from '@/board/sync/useTurnCursor';
@@ -252,6 +255,7 @@ function Playing({
     if (firstPlayer === null) setDecidingTurnOrder(true);
   }, [firstPlayer]);
   const turnOrderDecided = useCallback(() => setDecidingTurnOrder(false), []);
+  const [finished, setFinished] = useState<GameFinishedPayload | null>(null);
   const { opponentPresent } = useGameSync({
     code: game.code,
     seat,
@@ -260,6 +264,10 @@ function Playing({
     onTurnAdvanced: turn.receive,
     onTurnOrderRolled: order.receiveRoll,
     onTurnOrderDecided: order.receiveDecided,
+    onGameFinished: useCallback((result: GameFinishedPayload) => {
+      setFinished(result);
+      router.reload({ only: ['game'] });
+    }, []),
     // Presence cannot tell a watcher from the player who just sat down, and the
     // props this page is holding predate the claim either way.
     onSeatClaimed: useCallback(() => router.reload({ only: ['game'] }), []),
@@ -289,15 +297,16 @@ function Playing({
   const arenaKey = matchLive ? 'match' : 'solo';
   const savedState = matchLive && !liveOnMount ? null : restored;
 
+  const gameUndecided =
+    matchLive &&
+    game.status === GameStatus.Active &&
+    game.wins.host + game.wins.guest < game.game_number;
   const winClaim = useWinClaim({
     code: game.code,
     restoring: savedState,
-    enabled:
-      matchLive &&
-      game.status === GameStatus.Active &&
-      firstPlayer !== null &&
-      game.wins.host + game.wins.guest < game.game_number,
+    enabled: gameUndecided && firstPlayer !== null,
   });
+  const concession = useConcede({ code: game.code, enabled: gameUndecided });
   const onBoardState = useCallback(
     (state: GameState) => {
       publish(state);
@@ -333,6 +342,15 @@ function Playing({
                 className="text-xs font-medium text-gray-500 underline hover:text-gray-900"
               >
                 Waiting room
+              </button>
+            )}
+            {gameUndecided && (
+              <button
+                type="button"
+                onClick={concession.open}
+                className="rounded-full px-3 py-0.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+              >
+                {game.format === MatchFormat.Bo3 ? 'Concede game' : 'Concede'}
               </button>
             )}
             <ZoomControls scale={scale} onChange={setScale} />
@@ -422,6 +440,28 @@ function Playing({
           error={winClaim.error}
           onConfirm={winClaim.claim}
           onClose={winClaim.dismiss}
+        />
+      )}
+
+      {concession.confirming && (
+        <ConcedeModal
+          seat={seat}
+          opponentName={opponentName}
+          score={game}
+          busy={concession.busy}
+          error={concession.error}
+          onConfirm={concession.concede}
+          onClose={concession.dismiss}
+        />
+      )}
+
+      {finished && (
+        <GameFinishedModal
+          seat={seat}
+          opponentName={opponentName}
+          format={game.format}
+          result={finished}
+          onClose={() => setFinished(null)}
         />
       )}
 
