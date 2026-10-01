@@ -1,5 +1,12 @@
 # Card Sim
 
+## PonyRec, where this was ported from
+
+The PonyRec web app (the Laravel app this site's PvP was ported out of) is at
+`../ponyrec/kayou_structured/`, not `../ponyrec/` itself, which is a workspace holding it and the
+rest of the ecosystem. When a ticket says to port something from PonyRec, look there.
+Documentation for the wider ecosystem is in `../ponyrec/docs/`.
+
 ## Code comments
 
 Keep them brief, and only where the code itself is hard to parse: a non-obvious algorithm, a
