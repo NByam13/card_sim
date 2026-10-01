@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\GameStatus;
 use App\Enums\Seat;
 use Closure;
 use Database\Factories\GameFactory;
@@ -22,6 +23,7 @@ use LogicException;
  *
  * @see documentation/anonymous-games/spec.md
  *
+ * @property GameStatus $status
  * @property Seat|null $first_player
  * @property array{host: array<int, int>, guest: array<int, int>, winner: 'host'|'guest', rerolls: int}|null $turn_order_roll
  * @property int $turn_number
@@ -32,8 +34,6 @@ class Game extends Model
 {
     /** @use HasFactory<GameFactory> */
     use HasFactory;
-
-    public const STATUSES = ['waiting', 'active', 'finished'];
 
     /** The setups a game may be played with. One, so far. */
     public const SETUPS = ['mlp'];
@@ -77,7 +77,7 @@ class Game extends Model
      */
     protected $attributes = [
         'setup' => 'mlp',
-        'status' => 'waiting',
+        'status' => GameStatus::Waiting->value,
         'turn_number' => 0,
     ];
 
@@ -88,6 +88,7 @@ class Game extends Model
     protected function casts(): array
     {
         return [
+            'status' => GameStatus::class,
             'host_deck' => 'array',
             'guest_deck' => 'array',
             'host_state' => 'array',
@@ -167,7 +168,7 @@ class Game extends Model
 
     public function guestSeatOpen(): bool
     {
-        return $this->status === 'waiting' && $this->guest_token_hash === null;
+        return $this->status === GameStatus::Waiting && $this->guest_token_hash === null;
     }
 
     /** The display name for a seat, falling back to its label. */
@@ -334,11 +335,11 @@ class Game extends Model
             if (array_sum($host) !== array_sum($guest)) {
                 $winner = array_sum($host) > array_sum($guest) ? Seat::Host : Seat::Guest;
 
-                return ['host' => $host, 'guest' => $guest, 'winner' => $winner->value, 'rerolls' => $rerolls];
+                return [Seat::Host->value => $host, Seat::Guest->value => $guest, 'winner' => $winner->value, 'rerolls' => $rerolls];
             }
         }
 
-        return ['host' => [6, 6], 'guest' => [1, 1], 'winner' => Seat::Host->value, 'rerolls' => self::MAX_TURN_ORDER_REROLLS];
+        return [Seat::Host->value => [6, 6], Seat::Guest->value => [1, 1], 'winner' => Seat::Host->value, 'rerolls' => self::MAX_TURN_ORDER_REROLLS];
     }
 
     /**
@@ -474,7 +475,7 @@ class Game extends Model
     /** Whether this seat may move the cursor now. Always false for a watcher. */
     public function isTurnOf(?Seat $seat): bool
     {
-        return $seat !== null && $this->status === 'active' && $seat === $this->actingSeat();
+        return $seat !== null && $this->status === GameStatus::Active && $seat === $this->actingSeat();
     }
 
     /**

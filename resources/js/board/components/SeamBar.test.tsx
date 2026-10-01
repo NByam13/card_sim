@@ -1,7 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { Seat, TurnCursor, TurnOrder } from '../sync/types';
+import { Seat } from '@/types/game';
+import { TurnCursor, TurnOrder } from '../sync/types';
 import SeamBar from './SeamBar';
 
 const names: Record<Seat, string> = { host: 'Twilight', guest: 'Rarity' };

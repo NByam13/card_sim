@@ -1,6 +1,7 @@
 import Modal from '@/components/Modal';
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Seat, TurnOrder, TurnOrderRoll } from '../sync/types';
+import { opposingSeat, Seat } from '@/types/game';
+import { TurnOrder, TurnOrderRoll } from '../sync/types';
 
 /** How long the dice tumble before a roll that arrives live lands. */
 export const ROLL_REVEAL_MS = 1100;
@@ -16,8 +17,6 @@ const PIPS: Record<number, number[]> = {
   5: [0, 2, 4, 6, 8],
   6: [0, 2, 3, 5, 6, 8],
 };
-
-const opposing = (seat: Seat): Seat => (seat === 'host' ? 'guest' : 'host');
 
 const rollKey = (roll: TurnOrderRoll | null) =>
   roll ? `${roll.host.join()}|${roll.guest.join()}|${roll.rerolls}` : null;
@@ -47,7 +46,7 @@ export default function TurnOrderModal({
   onDone: () => void;
 }) {
   const { roll, first_player } = turnOrder;
-  const opponent = opposing(seat);
+  const opponent = opposingSeat(seat);
   const revealing = useRollReveal(roll);
   const settled = roll !== null && !revealing;
   const chooser = settled ? roll.winner : null;

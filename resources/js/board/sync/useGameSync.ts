@@ -2,11 +2,12 @@ import { http } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/types/cards';
-import { Seat, StateFrame, TurnOrderRoll, WireCursor } from './types';
+import { Role, Seat, SPECTATOR_ROLE } from '@/types/game';
+import { StateFrame, TurnOrderRoll, WireCursor } from './types';
 
 interface Member {
   id: string;
-  role: Seat | 'spectator';
+  role: Role;
   name: string | null;
 }
 
@@ -93,24 +94,24 @@ export function useGameSync({
     const presence = channel();
     if (!presence) return;
 
-    const isOpponent = (member: Member) => member.role !== 'spectator' && member.role !== seat;
+    const isOpponent = (member: Member) => member.role !== SPECTATOR_ROLE && member.role !== seat;
 
     presence
       .here((members: Member[]) => {
         setOpponentPresent(members.some(isOpponent));
-        setWatching(members.filter((m) => m.role === 'spectator').length);
+        setWatching(members.filter((m) => m.role === SPECTATOR_ROLE).length);
         handlers.current.onAnnounce();
       })
       .joining((member: Member) => {
         if (isOpponent(member)) setOpponentPresent(true);
-        else if (member.role === 'spectator') setWatching((count) => count + 1);
+        else if (member.role === SPECTATOR_ROLE) setWatching((count) => count + 1);
 
         // Whoever just arrived starts blank, so everyone re-announces.
         handlers.current.onAnnounce();
       })
       .leaving((member: Member) => {
         if (isOpponent(member)) setOpponentPresent(false);
-        else if (member.role === 'spectator') setWatching((count) => Math.max(0, count - 1));
+        else if (member.role === SPECTATOR_ROLE) setWatching((count) => Math.max(0, count - 1));
       })
       .listen('.board.state', ({ seat: from, ...frame }: RelayedFrame) => {
         if (from === seat) return;

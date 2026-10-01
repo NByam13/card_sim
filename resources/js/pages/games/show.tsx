@@ -16,12 +16,10 @@ import ZoomControls from '@/board/components/ZoomControls';
 import { GameState } from '@/board/types';
 import { usePersistentZoom } from '@/board/zoom';
 import { Deck } from '@/types/cards';
+import { GameStatus, opposingSeat, Role, Seat, SPECTATOR_ROLE } from '@/types/game';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
-
-type Seat = 'host' | 'guest';
-type Role = Seat | 'spectator';
 
 interface SeatState {
   name: string | null;
@@ -32,7 +30,7 @@ interface SeatState {
 interface Game {
   code: string;
   setup: string;
-  status: 'waiting' | 'active' | 'finished';
+  status: GameStatus;
   seats: Record<Seat, SeatState>;
   you: Seat | null;
   /** Which seats are ready to play each other. Both means the match is live. */
@@ -121,7 +119,9 @@ export default function Show({
           <>
             <header className="space-y-1">
               <h1 className="text-2xl font-semibold">
-                {game.status === 'waiting' ? 'Waiting for a second player' : 'Both players seated'}
+                {game.status === GameStatus.Waiting
+                  ? 'Waiting for a second player'
+                  : 'Both players seated'}
               </h1>
               <p className="text-sm text-gray-600">
                 {seat ? `You are the ${seat}.` : 'You are watching this game.'}
@@ -206,7 +206,7 @@ function Playing({
   // The mirror is glanced at where your own board is worked on, so it keeps its
   // own scale and its own cookie.
   const [mirrorScale, setMirrorScale] = usePersistentZoom('opponent', 1);
-  const opponent = seat === 'host' ? 'guest' : 'host';
+  const opponent = opposingSeat(seat);
   const seated = game.seats[opponent].claimed;
 
   // Props say what the server last recorded; the channel says what happened
@@ -224,7 +224,7 @@ function Playing({
   const { publish, announce } = useBoardRelay({
     code: game.code,
     relaying: matchLive,
-    saving: game.status === 'active',
+    saving: game.status === GameStatus.Active,
   });
   const { mirror, receive } = useMirror(lookupCard, game.opponent_state);
   const turn = useTurnCursor({ code: game.code, seat, cursor });
@@ -554,12 +554,12 @@ function Table({
   }, [channel, onCancelled]);
 
   const present = (role: Role) => members.some((m) => m.role === role);
-  const watching = members.filter((m) => m.role === 'spectator').length;
+  const watching = members.filter((m) => m.role === SPECTATOR_ROLE).length;
 
   return (
     <div className="space-y-2">
       <ul className="divide-y divide-gray-200 rounded border border-gray-200">
-        {(['host', 'guest'] as Seat[]).map((which) => {
+        {[Seat.Host, Seat.Guest].map((which) => {
           const state = game.seats[which];
           return (
             <li key={which} className="flex items-center justify-between gap-4 px-4 py-3">

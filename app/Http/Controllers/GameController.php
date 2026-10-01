@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\GameStatus;
 use App\Enums\Seat;
 use App\Events\GameCancelled;
 use App\Events\MatchAccepted;
@@ -69,7 +70,7 @@ class GameController extends Controller
             'canJoin' => $seat === null && $game->guestSeatOpen(),
             // The same rule `destroy()` enforces, so the button is only ever
             // offered where the request behind it would be allowed.
-            'canCancel' => $seat === Seat::Host && $game->status === 'waiting',
+            'canCancel' => $seat === Seat::Host && $game->status === GameStatus::Waiting,
         ]);
     }
 

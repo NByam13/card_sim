@@ -1,6 +1,7 @@
 import { Fragment, ReactNode } from 'react';
 import { advanceLabel, displayStops, trackTurn } from '../mlp/turnTrack';
-import { Seat, TurnCursor, TurnOrder } from '../sync/types';
+import { Seat } from '@/types/game';
+import { TurnCursor, TurnOrder } from '../sync/types';
 
 const BUTTON =
   'rounded-full bg-emerald-600 px-3 py-0.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700';

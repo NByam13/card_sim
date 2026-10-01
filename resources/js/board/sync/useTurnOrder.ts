@@ -4,7 +4,8 @@ import {
 } from '@/actions/App/Http/Controllers/TurnOrderController';
 import { router } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Seat, TurnOrder, TurnOrderRoll } from './types';
+import { Seat } from '@/types/game';
+import { TurnOrder, TurnOrderRoll } from './types';
 import { postJson } from './useGameSync';
 
 const sameDice = (a: number[], b: number[]) =>
