@@ -15,11 +15,17 @@ import { postJson } from './useGameSync';
  */
 export function useWinClaim({
   code,
+  matchNumber,
   gameNumber,
+  beforeRecord,
   restoring,
   enabled,
 }: {
   code: string;
+  /** The match in progress. A rematch starts the game number over. */
+  matchNumber?: number;
+  /** Runs first, and is waited on: the board saved as it stands, since the result stops saves. */
+  beforeRecord?: () => Promise<void>;
   /** The game being claimed. A claim for one already over is refused. */
   gameNumber: number;
   /** The board the arena mounts with, or null for a fresh deal. */
@@ -72,8 +78,10 @@ export function useWinClaim({
     inFlight.current = true;
     setBusy(true);
     setError(null);
+    const record = () =>
+      postJson(claimRoute.url(code), { match_number: matchNumber, game_number: gameNumber });
 
-    postJson(claimRoute.url(code), { game_number: gameNumber })
+    (beforeRecord ? beforeRecord().then(record) : record())
       .then(() => setPrompting(false))
       .catch((failure) => {
         console.error('failed to claim the win', failure);
@@ -84,7 +92,7 @@ export function useWinClaim({
         setBusy(false);
         reloadIntoCurrentGame();
       });
-  }, [code, gameNumber]);
+  }, [code, matchNumber, gameNumber, beforeRecord]);
 
   return {
     watch,

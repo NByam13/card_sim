@@ -96,7 +96,7 @@ class GameFactory extends Factory
 
             return $decidedBy === false
                 ? ['game_results' => $results, 'game_number' => count($results) + 1]
-                : ['game_results' => $results, 'game_number' => count($results), 'status' => GameStatus::Finished, 'winner_seat' => Seat::from($decidedBy)];
+                : ['game_results' => $results, 'game_number' => count($results), 'status' => GameStatus::Finished, 'winner_seat' => Seat::from($decidedBy), 'host_accepted_at' => null, 'guest_accepted_at' => null];
         });
     }
 

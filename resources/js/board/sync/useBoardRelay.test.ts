@@ -184,6 +184,46 @@ describe('useBoardRelay', () => {
       expect((callsTo('/state')[0][1] as { game_number: number }).game_number).toBe(1);
     });
 
+    it('names the match, which a rematch starts the game number over in', () => {
+      const { result } = renderHook(() =>
+        useBoardRelay({
+          code: 'abc123',
+          matchNumber: 2,
+          gameNumber: 1,
+          relaying: true,
+          saving: true,
+          onStale,
+        })
+      );
+
+      act(() => result.current.publish(boardWith([card('TEST-C01')])));
+      act(() => vi.advanceTimersByTime(1500));
+
+      expect(callsTo('/sync')[0][1]).toMatchObject({ match_number: 2, game_number: 1 });
+      expect(callsTo('/state')[0][1]).toMatchObject({ match_number: 2, game_number: 1 });
+    });
+
+    it('saves a board still waiting on the debounce when flushed', async () => {
+      const { result } = relay();
+
+      act(() => result.current.publish(boardWith([card('TEST-C01')])));
+      await act(() => result.current.flush());
+      expect(callsTo('/state')).toHaveLength(1);
+
+      act(() => vi.advanceTimersByTime(1500));
+      expect(callsTo('/state')).toHaveLength(1);
+    });
+
+    it('has nothing to flush once the board is saved', async () => {
+      const { result } = relay();
+
+      act(() => result.current.publish(boardWith([card('TEST-C01')])));
+      act(() => vi.advanceTimersByTime(1500));
+      await act(() => result.current.flush());
+
+      expect(callsTo('/state')).toHaveLength(1);
+    });
+
     it('saves what is on the board when it is left mid-move', () => {
       const { result, unmount } = relay();
 
