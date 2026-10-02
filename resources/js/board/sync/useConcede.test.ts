@@ -10,7 +10,7 @@ const { router } = await import('@inertiajs/react');
 const posted = vi.mocked(postJson);
 
 const mount = (enabled = true) =>
-  renderHook(({ enabled }) => useConcede({ code: 'abc123', enabled }), {
+  renderHook(({ enabled }) => useConcede({ code: 'abc123', gameNumber: 2, enabled }), {
     initialProps: { enabled },
   });
 
@@ -39,10 +39,10 @@ describe('useConcede', () => {
     });
 
     expect(posted).toHaveBeenCalledTimes(1);
-    expect(posted).toHaveBeenCalledWith('/games/abc123/concede', {});
+    expect(posted).toHaveBeenCalledWith('/games/abc123/concede', { game_number: 2 });
     await waitFor(() => expect(result.current.busy).toBe(false));
     expect(result.current.confirming).toBe(false);
-    expect(router.reload).toHaveBeenCalledWith({ only: ['game'] });
+    expect(router.reload).toHaveBeenCalledWith({ only: ['game', 'cursor', 'turnOrder'] });
   });
 
   it('stays open with an error when the concede is refused', async () => {

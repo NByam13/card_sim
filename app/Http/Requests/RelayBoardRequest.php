@@ -9,7 +9,7 @@ use Illuminate\Auth\Access\Response;
 /**
  * A seat's redacted board, relayed to the table. Only once the match is live.
  */
-class RelayBoardRequest extends ActiveSeatRequest
+class RelayBoardRequest extends GameScopedRequest
 {
     protected function authorizeSeat(Seat $seat, Game $game): Response
     {
@@ -17,7 +17,7 @@ class RelayBoardRequest extends ActiveSeatRequest
     }
 
     /** @return array<string, mixed> */
-    public function rules(): array
+    protected function gameRules(): array
     {
         return [
             'session' => ['required', 'string', 'max:64'],

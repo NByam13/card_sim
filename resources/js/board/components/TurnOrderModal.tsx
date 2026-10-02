@@ -24,6 +24,7 @@ const rollKey = (roll: TurnOrderRoll | null) =>
 /**
  * Deciding who goes first, in front of the whole board, before either seat has
  * drawn. Two stages: settling who chooses (the 2d6 roll), then the choice.
+ * Between games of a Bo3 there is no roll: the last game's loser chooses.
  *
  * It cannot be dismissed. Once the first player is decided it holds the result
  * for a moment and then calls `onDone`.
@@ -31,6 +32,7 @@ const rollKey = (roll: TurnOrderRoll | null) =>
 export default function TurnOrderModal({
   seat,
   names,
+  gameNumber,
   turnOrder,
   opponentPresent,
   onRoll,
@@ -39,6 +41,7 @@ export default function TurnOrderModal({
 }: {
   seat: Seat;
   names: Record<Seat, string>;
+  gameNumber: number;
   turnOrder: TurnOrder;
   opponentPresent: boolean;
   onRoll: () => void;
@@ -49,7 +52,8 @@ export default function TurnOrderModal({
   const opponent = opposingSeat(seat);
   const revealing = useRollReveal(roll);
   const settled = roll !== null && !revealing;
-  const chooser = settled ? roll.winner : null;
+  const betweenGames = gameNumber > 1;
+  const chooser = betweenGames || settled ? turnOrder.chooser : null;
   const [pending, setPending] = useState(false);
 
   // A response, a broadcast or a reload after a failure all land as a new turn order.
@@ -73,35 +77,41 @@ export default function TurnOrderModal({
     >
       <div className="bg-linear-to-br from-emerald-500 to-teal-700 px-6 pt-6 pb-12 text-center text-white">
         <p className="text-[10px] font-semibold tracking-widest text-emerald-100 uppercase">
-          Before you draw
+          {betweenGames ? `Game ${gameNumber}` : 'Before you draw'}
         </p>
         <h2 id="turn-order-title" className="mt-1 text-2xl font-semibold">
           Who goes first?
         </h2>
         <p className="mt-1 text-sm text-emerald-50">
-          Roll 2d6 each. The higher total chooses who goes first.
+          {betweenGames
+            ? 'The loser of the last game chooses who goes first.'
+            : 'Roll 2d6 each. The higher total chooses who goes first.'}
         </p>
       </div>
 
-      <div className="-mt-8 space-y-5 px-6 pb-6">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <SeatDice
-            name="You"
-            dice={roll?.[seat] ?? null}
-            rolling={revealing}
-            won={chooser === seat}
-            lost={chooser === opponent}
-          />
-          <span className="text-xs font-semibold tracking-widest text-gray-400 uppercase">vs</span>
-          <SeatDice
-            name={names[opponent]}
-            dice={roll?.[opponent] ?? null}
-            rolling={revealing}
-            won={chooser === opponent}
-            lost={chooser === seat}
-            away={!opponentPresent}
-          />
-        </div>
+      <div className={`space-y-5 px-6 pb-6 ${betweenGames ? 'pt-5' : '-mt-8'}`}>
+        {!betweenGames && (
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <SeatDice
+              name="You"
+              dice={roll?.[seat] ?? null}
+              rolling={revealing}
+              won={chooser === seat}
+              lost={chooser === opponent}
+            />
+            <span className="text-xs font-semibold tracking-widest text-gray-400 uppercase">
+              vs
+            </span>
+            <SeatDice
+              name={names[opponent]}
+              dice={roll?.[opponent] ?? null}
+              rolling={revealing}
+              won={chooser === opponent}
+              lost={chooser === seat}
+              away={!opponentPresent}
+            />
+          </div>
+        )}
 
         {settled && roll.rerolls > 0 && (
           <p className="motion-safe:animate-rise-in text-center text-xs text-gray-400">
@@ -119,7 +129,7 @@ export default function TurnOrderModal({
                 first_player === seat ? 'You go first' : `${names[first_player]} goes first`
               }
             />
-          ) : !roll ? (
+          ) : !betweenGames && !roll ? (
             <>
               <button
                 type="button"
@@ -139,7 +149,9 @@ export default function TurnOrderModal({
           ) : chooser === seat ? (
             <div className="motion-safe:animate-rise-in w-full space-y-3">
               <p className="text-center text-sm font-semibold text-gray-900">
-                You won the roll. Your call:
+                {betweenGames
+                  ? 'You lost the last game. Your call:'
+                  : 'You won the roll. Your call:'}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <Choice
@@ -164,7 +176,10 @@ export default function TurnOrderModal({
               </div>
             </div>
           ) : (
-            <Waiting>{names[opponent]} won the roll and is choosing who goes first</Waiting>
+            <Waiting>
+              {names[opponent]} {betweenGames ? 'lost the last game' : 'won the roll'} and is
+              choosing who goes first
+            </Waiting>
           )}
         </div>
       </div>

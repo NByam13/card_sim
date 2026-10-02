@@ -9,6 +9,7 @@ import { MatchScore } from './WinClaimModal';
 const names: Record<Seat, string> = { host: 'Twilight', guest: 'Rarity' };
 
 const cursor = (over: Partial<TurnCursor> = {}): TurnCursor => ({
+  game_number: 1,
   turn_number: 0,
   active_seat: null,
   turn_stop: null,
@@ -17,8 +18,10 @@ const cursor = (over: Partial<TurnCursor> = {}): TurnCursor => ({
 });
 
 const rolled: TurnOrder = {
+  game_number: 1,
   roll: { host: [6, 5], guest: [2, 1], winner: 'host', rerolls: 0 },
   first_player: null,
+  chooser: 'host',
 };
 
 const decided: TurnOrder = { ...rolled, first_player: 'guest' };
@@ -26,7 +29,7 @@ const decided: TurnOrder = { ...rolled, first_player: 'guest' };
 describe('SeamBar', () => {
   describe('before turn order is decided', () => {
     it.each([
-      ['before the roll', { roll: null, first_player: null }],
+      ['before the roll', { game_number: 1, roll: null, first_player: null, chooser: null }],
       ['during the election', rolled],
     ])('rests with nothing to press %s', (_, turnOrder: TurnOrder) => {
       render(<SeamBar seat="host" names={names} cursor={cursor()} turnOrder={turnOrder} />);
@@ -146,7 +149,7 @@ describe('SeamBar', () => {
 
   describe('presence', () => {
     it.each([
-      ['before the roll', { roll: null, first_player: null }],
+      ['before the roll', { game_number: 1, roll: null, first_player: null, chooser: null }],
       ['during the election', rolled],
       ['mid-turn', decided],
     ])('marks an away seat against its name %s', (_, turnOrder: TurnOrder) => {
@@ -195,7 +198,7 @@ describe('SeamBar', () => {
     };
 
     it.each([
-      ['before the roll', { roll: null, first_player: null }],
+      ['before the roll', { game_number: 1, roll: null, first_player: null, chooser: null }],
       ['mid-turn', decided],
     ])('shows a Bo3 from your side of the table %s', (_, turnOrder: TurnOrder) => {
       render(

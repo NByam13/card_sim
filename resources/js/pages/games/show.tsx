@@ -1,7 +1,6 @@
 import { accept, destroy } from '@/actions/App/Http/Controllers/GameController';
 import BoardArena from '@/board/components/BoardArena';
 import ConcedeModal from '@/board/components/ConcedeModal';
-import GameFinishedModal from '@/board/components/GameFinishedModal';
 import MatchFormatToggle from '@/components/MatchFormatToggle';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
@@ -10,8 +9,10 @@ import TurnOrderModal from '@/board/components/TurnOrderModal';
 import WinClaimModal, { MatchScore } from '@/board/components/WinClaimModal';
 import { contactLane } from '@/board/mlp/turnTrack';
 import { CompactGameState, expandState } from '@/board/sync/persist';
-import { GameFinishedPayload, PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
+import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
 import { useBoardRelay } from '@/board/sync/useBoardRelay';
+import { cursorFor, turnOrderFor } from '@/board/sync/currentGame';
+import { reloadIntoCurrentGame } from '@/board/sync/reload';
 import { useConcede } from '@/board/sync/useConcede';
 import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
 import { useMirror } from '@/board/sync/useMirror';
@@ -234,7 +235,6 @@ function Playing({
   useEffect(() => setAccepted(game.accepted), [game.accepted]);
 
   const matchLive = accepted.host && accepted.guest;
-  const [liveOnMount] = useState(matchLive);
   // The other seat turning up while this board was on screen, as opposed to
   // already being there when the page loaded. Only the first is worth a modal.
   const [seatedOnMount] = useState(seated);
@@ -242,20 +242,26 @@ function Playing({
 
   const { publish, announce } = useBoardRelay({
     code: game.code,
+    gameNumber: game.game_number,
+    onStale: reloadIntoCurrentGame,
     relaying: matchLive,
     saving: game.status === GameStatus.Active,
   });
-  const { mirror, receive } = useMirror(lookupCard, game.opponent_state);
+  const { mirror, receive } = useMirror(lookupCard, game.opponent_state, game.game_number);
   const turn = useTurnCursor({ code: game.code, seat, cursor });
   const order = useTurnOrder({ code: game.code, turnOrder: servedTurnOrder });
-  const firstPlayer = order.turnOrder.first_player;
+  // The hooks take a reload into the next game an effect after the page does, so
+  // for that render they still hold the last game's. The board is only handed
+  // turn order and the cursor once they belong to the game it is dealt for.
+  const currentOrder = turnOrderFor(game.game_number, order.turnOrder);
+  const currentCursor = cursorFor(game.game_number, turn.cursor);
+  const firstPlayer = currentOrder.first_player;
   // Outlives the decision by the modal's hold, so the result is seen before it goes.
   const [decidingTurnOrder, setDecidingTurnOrder] = useState(firstPlayer === null);
   useEffect(() => {
     if (firstPlayer === null) setDecidingTurnOrder(true);
   }, [firstPlayer]);
   const turnOrderDecided = useCallback(() => setDecidingTurnOrder(false), []);
-  const [finished, setFinished] = useState<GameFinishedPayload | null>(null);
   const { opponentPresent } = useGameSync({
     code: game.code,
     seat,
@@ -264,10 +270,7 @@ function Playing({
     onTurnAdvanced: turn.receive,
     onTurnOrderRolled: order.receiveRoll,
     onTurnOrderDecided: order.receiveDecided,
-    onGameFinished: useCallback((result: GameFinishedPayload) => {
-      setFinished(result);
-      router.reload({ only: ['game', 'cursor'] });
-    }, []),
+    onGameFinished: reloadIntoCurrentGame,
     // Presence cannot tell a watcher from the player who just sat down, and the
     // props this page is holding predate the claim either way.
     onSeatClaimed: useCallback(() => router.reload({ only: ['game'] }), []),
@@ -292,10 +295,12 @@ function Playing({
   );
 
   // A match starting re-deals both halves, so the hand someone goldfished while
-  // they waited does not become the hand they play. The key remounts the arena;
-  // dropping the restore is what stops it dealing the discarded board again.
-  const arenaKey = matchLive ? 'match' : 'solo';
-  const savedState = matchLive && !liveOnMount ? null : restored;
+  // they waited does not become the hand they play. So does each next game of a
+  // Bo3. The key remounts the arena; dropping the restore is what stops it
+  // dealing the discarded board again.
+  const arenaKey = matchLive ? `match:${game.game_number}` : 'solo';
+  const [arenaKeyOnMount] = useState(arenaKey);
+  const savedState = arenaKey === arenaKeyOnMount ? restored : null;
 
   const gameUndecided =
     matchLive &&
@@ -303,10 +308,15 @@ function Playing({
     game.wins.host + game.wins.guest < game.game_number;
   const winClaim = useWinClaim({
     code: game.code,
+    gameNumber: game.game_number,
     restoring: savedState,
     enabled: gameUndecided && firstPlayer !== null,
   });
-  const concession = useConcede({ code: game.code, enabled: gameUndecided });
+  const concession = useConcede({
+    code: game.code,
+    gameNumber: game.game_number,
+    enabled: gameUndecided,
+  });
   const onBoardState = useCallback(
     (state: GameState) => {
       publish(state);
@@ -315,8 +325,8 @@ function Playing({
     [publish, winClaim.watch]
   );
 
-  const acting = turn.cursor.active_seat ?? firstPlayer;
-  const lane = contactLane(turn.cursor.turn_stop);
+  const acting = currentCursor.active_seat ?? firstPlayer;
+  const lane = contactLane(currentCursor.turn_stop);
 
   const opponentName = seatNames(game)[opponent];
   // A full visit rather than a bare POST: the board deals fresh from props that
@@ -367,7 +377,7 @@ function Playing({
           // re-deal theirs is a way around the mulligan rules, so it is a solo
           // affordance only.
           canRestart={!matchLive}
-          turnCursor={matchLive ? turn : undefined}
+          turnCursor={matchLive ? { ...turn, cursor: currentCursor } : undefined}
           goingFirst={matchLive ? (firstPlayer ? firstPlayer === seat : null) : undefined}
           opponentStarted={mirror?.started ?? false}
           rings={matchLive ? { acting: acting === seat, contactLane: lane } : undefined}
@@ -378,8 +388,8 @@ function Playing({
                     <SeamBar
                       seat={seat}
                       names={seatNames(game)}
-                      cursor={turn.cursor}
-                      turnOrder={order.turnOrder}
+                      cursor={currentCursor}
+                      turnOrder={currentOrder}
                       onAdvance={onAdvance}
                       waiting={waiting}
                       away={opponentPresent === false ? [opponent] : []}
@@ -424,6 +434,7 @@ function Playing({
         <TurnOrderModal
           seat={seat}
           names={seatNames(game)}
+          gameNumber={order.turnOrder.game_number}
           turnOrder={order.turnOrder}
           opponentPresent={opponentPresent !== false}
           onRoll={order.roll}
@@ -453,16 +464,6 @@ function Playing({
           error={concession.error}
           onConfirm={concession.concede}
           onClose={concession.dismiss}
-        />
-      )}
-
-      {finished && (
-        <GameFinishedModal
-          seat={seat}
-          opponentName={opponentName}
-          format={game.format}
-          result={finished}
-          onClose={() => setFinished(null)}
         />
       )}
 

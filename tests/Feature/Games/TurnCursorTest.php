@@ -31,16 +31,16 @@ class TurnCursorTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->onTurn(3, Seat::Guest, 'main')->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/cursor", ['turn_stop' => 'end'])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'turn_stop' => 'end'])
             ->assertOk()
-            ->assertExactJson(['cursor' => ['turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'end']]);
+            ->assertExactJson(['cursor' => ['game_number' => 1, 'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'end']]);
 
         $game->refresh();
         $this->assertSame(3, $game->turn_number);
         $this->assertSame(Seat::Guest, $game->active_seat);
         $this->assertSame('end', $game->turn_stop);
         Event::assertDispatched(TurnAdvanced::class, fn (TurnAdvanced $event) => $event->broadcastWith() === [
-            'cursor' => ['turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'end'],
+            'cursor' => ['game_number' => 1, 'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'end'],
         ]);
     }
 
@@ -49,9 +49,9 @@ class TurnCursorTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided(Seat::Guest)->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/cursor", ['turn_stop' => 'main'])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'turn_stop' => 'main'])
             ->assertOk()
-            ->assertExactJson(['cursor' => ['turn_number' => 1, 'active_seat' => 'guest', 'turn_stop' => 'main']]);
+            ->assertExactJson(['cursor' => ['game_number' => 1, 'turn_number' => 1, 'active_seat' => 'guest', 'turn_stop' => 'main']]);
     }
 
     public function test_ending_the_turn_hands_it_to_the_other_seat(): void
@@ -60,9 +60,9 @@ class TurnCursorTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->onTurn(1, Seat::Host, 'end')->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/cursor", ['ends_turn' => true])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'ends_turn' => true])
             ->assertOk()
-            ->assertExactJson(['cursor' => ['turn_number' => 2, 'active_seat' => 'guest', 'turn_stop' => null]]);
+            ->assertExactJson(['cursor' => ['game_number' => 1, 'turn_number' => 2, 'active_seat' => 'guest', 'turn_stop' => null]]);
 
         $game->refresh();
         $this->assertSame(2, $game->turn_number);
@@ -76,7 +76,7 @@ class TurnCursorTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->onTurn()->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/cursor", ['turn_stop' => 'contact:2 / no such stop'])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'turn_stop' => 'contact:2 / no such stop'])
             ->assertOk();
 
         $this->assertSame('contact:2 / no such stop', $game->refresh()->turn_stop);
@@ -88,7 +88,7 @@ class TurnCursorTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->onTurn(1, Seat::Host, 'main')->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/cursor", ['ends_turn' => true])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'ends_turn' => true])
             ->assertForbidden()
             ->assertJson(['message' => 'It is not your turn.']);
 
@@ -106,7 +106,7 @@ class TurnCursorTest extends TestCase
             ->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/cursor", ['ends_turn' => true])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'ends_turn' => true])
             ->assertForbidden()
             ->assertJson(['message' => 'This game has already been decided.']);
 
@@ -119,7 +119,7 @@ class TurnCursorTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided(Seat::Host)->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/cursor", ['turn_stop' => 'main'])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'turn_stop' => 'main'])
             ->assertForbidden();
 
         $this->assertSame(0, $game->refresh()->turn_number);
@@ -130,7 +130,7 @@ class TurnCursorTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderRolled()->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/cursor", ['turn_stop' => 'main'])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'turn_stop' => 'main'])
             ->assertForbidden();
 
         $this->assertSame(0, $game->refresh()->turn_number);
@@ -140,7 +140,7 @@ class TurnCursorTest extends TestCase
     {
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->onTurn()->create();
 
-        $this->postJson("/games/{$game->code}/cursor", ['turn_stop' => 'end'])->assertForbidden();
+        $this->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'turn_stop' => 'end'])->assertForbidden();
 
         $this->assertSame('main', $game->refresh()->turn_stop);
     }
@@ -150,7 +150,7 @@ class TurnCursorTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->onTurn()->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/cursor", [])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('turn_stop');
     }
@@ -160,7 +160,7 @@ class TurnCursorTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->onTurn(1, Seat::Host, 'end')->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/cursor", ['ends_turn' => true, 'turn_stop' => 'main'])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'ends_turn' => true, 'turn_stop' => 'main'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('turn_stop');
 
@@ -199,8 +199,9 @@ class TurnCursorTest extends TestCase
         $this->assertFalse($stale->advanceCursor(null, true));
 
         $game->refresh();
-        $this->assertSame(1, $game->turn_number);
-        $this->assertSame(Seat::Host, $game->active_seat);
+        $this->assertSame(2, $game->game_number);
+        $this->assertSame(0, $game->turn_number);
+        $this->assertNull($game->active_seat);
     }
 
     public function test_a_lost_race_leaves_the_model_as_it_was(): void

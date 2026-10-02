@@ -150,13 +150,14 @@ class GameMatchFormatTest extends TestCase
         $this->assertSame(Seat::Guest, $game->winner_seat);
     }
 
-    public function test_a_game_already_recorded_is_not_recorded_again(): void
+    public function test_the_next_result_is_recorded_for_the_next_game(): void
     {
         $game = $this->seated()->bo3()->create();
         $game->recordGameResult(Seat::Host, WinReason::Story);
 
-        $this->assertFalse($game->recordGameResult(Seat::Guest, WinReason::Concede));
-        $this->assertScore($game->refresh(), host: 1, guest: 0);
+        $this->assertTrue($game->recordGameResult(Seat::Guest, WinReason::Concede));
+        $this->assertSame([1, 2], array_column($game->refresh()->game_results, 'game'));
+        $this->assertSame(3, $game->game_number);
     }
 
     public function test_only_one_of_two_results_racing_for_a_game_is_kept(): void

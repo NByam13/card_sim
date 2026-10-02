@@ -20,10 +20,11 @@ class GameResultController extends Controller
     public function claim(Game $game, ClaimWinRequest $request): JsonResponse
     {
         $seat = $request->seat();
+        $gameNumber = $game->game_number;
 
         $finished = $this->record($game, $seat, WinReason::Story);
 
-        Log::info('game.win_claimed', ['game' => $game->code, 'game_number' => $game->game_number, 'seat' => $seat->value]);
+        Log::info('game.win_claimed', ['game' => $game->code, 'game_number' => $gameNumber, 'seat' => $seat->value]);
 
         return response()->json($finished->broadcastWith());
     }
@@ -32,10 +33,11 @@ class GameResultController extends Controller
     public function concede(Game $game, ConcedeRequest $request): JsonResponse
     {
         $seat = $request->seat();
+        $gameNumber = $game->game_number;
 
         $finished = $this->record($game, $seat->opposing(), WinReason::Concede);
 
-        Log::info('game.conceded', ['game' => $game->code, 'game_number' => $game->game_number, 'seat' => $seat->value]);
+        Log::info('game.conceded', ['game' => $game->code, 'game_number' => $gameNumber, 'seat' => $seat->value]);
 
         return response()->json($finished->broadcastWith());
     }

@@ -10,7 +10,8 @@ use Illuminate\Contracts\Broadcasting\ShouldRescue;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * The roll winner chose who goes first.
+ * The chooser decided who goes first: the roll winner in game 1, the last
+ * game's loser after it.
  */
 class TurnOrderDecided implements ShouldBroadcastNow, ShouldRescue
 {
@@ -32,9 +33,9 @@ class TurnOrderDecided implements ShouldBroadcastNow, ShouldRescue
         return 'turn_order.decided';
     }
 
-    /** @return array{first_player: string} */
+    /** @return array{first_player: string, game_number: int} */
     public function broadcastWith(): array
     {
-        return ['first_player' => $this->firstPlayer->value];
+        return ['first_player' => $this->firstPlayer->value, 'game_number' => $this->game->game_number];
     }
 }

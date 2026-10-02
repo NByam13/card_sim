@@ -189,7 +189,13 @@ describe('BoardArena, the table itself', () => {
 describe('BoardArena, in a match', () => {
   /** A board on the shared cursor whose turn start the test runs by hand, as if the server answered. */
   function matchArena({
-    cursor = { turn_number: 3, active_seat: 'host', turn_stop: 'main', my_turn: true },
+    cursor = {
+      game_number: 1,
+      turn_number: 3,
+      active_seat: 'host',
+      turn_stop: 'main',
+      my_turn: true,
+    },
     savedState = boardWithRetiredCard(),
     goingFirst = true,
     opponentStarted = true,
@@ -257,7 +263,13 @@ describe('BoardArena, in a match', () => {
 
   it('leaves the turn button inert when it is not your turn', () => {
     matchArena({
-      cursor: { turn_number: 3, active_seat: 'guest', turn_stop: 'main', my_turn: false },
+      cursor: {
+        game_number: 1,
+        turn_number: 3,
+        active_seat: 'guest',
+        turn_stop: 'main',
+        my_turn: false,
+      },
     });
 
     expect(screen.getByRole('button', { name: 'Not your turn' })).toBeDisabled();
@@ -275,7 +287,7 @@ describe('BoardArena, in a match', () => {
   it('holds the opening hand back until turn order is decided', () => {
     const onState = vi.fn();
     const turnCursor = {
-      cursor: { turn_number: 0, active_seat: null, turn_stop: null, my_turn: true },
+      cursor: { game_number: 1, turn_number: 0, active_seat: null, turn_stop: null, my_turn: true },
       advance: vi.fn(),
       stepBack: vi.fn(),
     };
@@ -311,6 +323,7 @@ describe('BoardArena, in a match', () => {
 
   describe('opening turn 1', () => {
     const opening: TurnCursor = {
+      game_number: 1,
       turn_number: 0,
       active_seat: null,
       turn_stop: null,

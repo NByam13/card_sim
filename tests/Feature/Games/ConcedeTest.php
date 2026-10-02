@@ -40,7 +40,7 @@ class ConcedeTest extends TestCase
         $game = $this->seated()->matchLive()->turnOrderDecided()->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/concede")
+            ->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertOk()
             ->assertExactJson([
                 'status' => 'finished',
@@ -58,7 +58,7 @@ class ConcedeTest extends TestCase
         $game = $this->seated()->matchLive()->turnOrderDecided()->bo3()->gamesWonBy(Seat::Host, Seat::Guest)->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/concede")
+            ->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertOk()
             ->assertJsonPath('status', 'finished')
             ->assertJsonPath('winner_seat', 'host')
@@ -70,7 +70,7 @@ class ConcedeTest extends TestCase
         $game = $this->seated()->matchLive()->turnOrderDecided()->bo3()->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/concede")
+            ->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertOk()
             ->assertJsonPath('status', 'active')
             ->assertJsonPath('winner_seat', null);
@@ -85,7 +85,7 @@ class ConcedeTest extends TestCase
     {
         $game = $this->seated()->matchLive()->turnOrderDecided()->bo3()->create();
 
-        $this->as(Seat::Guest, $game)->postJson("/games/{$game->code}/concede")->assertOk();
+        $this->as(Seat::Guest, $game)->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertOk();
 
         Event::assertDispatched(GameFinished::class, fn (GameFinished $event) => $event->broadcastOn()[0]->name === "presence-game.{$game->code}"
             && $event->broadcastWith() === [
@@ -100,7 +100,7 @@ class ConcedeTest extends TestCase
         $game = $this->seated()->matchLive()->turnOrderDecided()->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/concede", ['seat' => 'host', 'winner' => 'guest'])
+            ->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'seat' => 'host', 'winner' => 'guest'])
             ->assertOk();
 
         $this->assertSame(Seat::Host, $game->refresh()->winner_seat);
@@ -111,7 +111,7 @@ class ConcedeTest extends TestCase
         $game = $this->seated()->matchLive()->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/concede")
+            ->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertOk()
             ->assertJsonPath('winner_seat', 'guest');
     }
@@ -123,7 +123,7 @@ class ConcedeTest extends TestCase
             ->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/concede")
+            ->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertConflict();
 
         $this->assertCount(1, $game->refresh()->game_results);
@@ -135,7 +135,7 @@ class ConcedeTest extends TestCase
         $game = $this->seated()->matchLive()->turnOrderDecided()->gamesWonBy(Seat::Guest)->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/concede")
+            ->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertForbidden()
             ->assertJson(['message' => 'This match is not in play.']);
 
@@ -147,7 +147,7 @@ class ConcedeTest extends TestCase
     {
         $game = $this->seated()->matchLive()->turnOrderDecided()->create();
 
-        $this->postJson("/games/{$game->code}/concede")->assertForbidden();
+        $this->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertForbidden();
 
         $this->assertSame([], $game->refresh()->game_results);
     }
@@ -157,7 +157,7 @@ class ConcedeTest extends TestCase
         $game = $this->seated()->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/concede")
+            ->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertForbidden()
             ->assertJson(['message' => 'Both players need to start the match first.']);
     }

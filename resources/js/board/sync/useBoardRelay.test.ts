@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyZones } from '../setup';
 import { CardInstance, GameState } from '../types';
-import { useBoardRelay } from './useBoardRelay';
+import { STALE_RETRY_MS, useBoardRelay } from './useBoardRelay';
 
 // The transport is the edge; everything above it is what these tests are about.
 vi.mock('./useGameSync', () => ({ postJson: vi.fn(() => Promise.resolve()) }));
@@ -52,11 +52,21 @@ function card(cardNumber: string): CardInstance {
   };
 }
 
+const onStale = vi.fn();
+
 const relay = (relaying = true, saving = relaying) =>
-  renderHook(() => useBoardRelay({ code: 'abc123', relaying, saving }));
+  renderHook(
+    ({ gameNumber }) => useBoardRelay({ code: 'abc123', gameNumber, relaying, saving, onStale }),
+    { initialProps: { gameNumber: 1 } }
+  );
+
+const refused = (status: number) =>
+  Object.assign(new Error(String(status)), { response: { status } });
 
 beforeEach(() => {
-  posted.mockClear();
+  posted.mockReset();
+  posted.mockResolvedValue(undefined);
+  onStale.mockClear();
   vi.useFakeTimers();
 });
 
@@ -164,6 +174,16 @@ describe('useBoardRelay', () => {
       expect(body.public_state.counts.hand).toBe(1);
     });
 
+    it('saves a board under the game it was played in', () => {
+      const { result, rerender } = relay();
+
+      act(() => result.current.publish(boardWith([card('TEST-C01')])));
+      rerender({ gameNumber: 2 });
+      act(() => vi.advanceTimersByTime(1500));
+
+      expect((callsTo('/state')[0][1] as { game_number: number }).game_number).toBe(1);
+    });
+
     it('saves what is on the board when it is left mid-move', () => {
       const { result, unmount } = relay();
 
@@ -211,6 +231,55 @@ describe('useBoardRelay', () => {
       act(() => result.current.announce());
 
       expect(posted).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('after the game has moved on', () => {
+    it('relays each board under the game it belongs to', () => {
+      const { result, rerender } = relay();
+
+      act(() => result.current.publish(boardWith()));
+      rerender({ gameNumber: 2 });
+      act(() => result.current.publish(boardWith()));
+
+      expect(
+        callsTo('/sync').map(([, body]) => (body as { game_number: number }).game_number)
+      ).toEqual([1, 2]);
+    });
+
+    it('reports a board refused as stale once, however many were in flight', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      posted.mockRejectedValue(refused(409));
+      const { result } = relay();
+
+      act(() => result.current.publish(boardWith()));
+      act(() => result.current.publish(boardWith()));
+      await act(async () => vi.advanceTimersByTime(1500));
+
+      expect(onStale).toHaveBeenCalledOnce();
+    });
+
+    it('reports the game again if the page is still on it a while later', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      posted.mockRejectedValue(refused(409));
+      const { result } = relay();
+
+      await act(async () => result.current.publish(boardWith()));
+      await act(async () => vi.advanceTimersByTime(STALE_RETRY_MS));
+      await act(async () => result.current.publish(boardWith()));
+
+      expect(onStale).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not mistake any other failure for a stale board', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      posted.mockRejectedValue(refused(500));
+      const { result } = relay();
+
+      act(() => result.current.publish(boardWith()));
+      await act(async () => vi.advanceTimersByTime(1500));
+
+      expect(onStale).not.toHaveBeenCalled();
     });
   });
 });

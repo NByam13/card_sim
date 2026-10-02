@@ -11,6 +11,7 @@ const { router } = await import('@inertiajs/react');
 const posted = vi.mocked(postJson);
 
 const served = (over: Partial<TurnCursor> = {}): TurnCursor => ({
+  game_number: 1,
   turn_number: 3,
   active_seat: 'host',
   turn_stop: null,
@@ -49,9 +50,17 @@ describe('useTurnCursor', () => {
     const response = pending();
 
     act(() => result.current.advance(vi.fn()));
-    await response.settle({ turn_number: 3, active_seat: 'host', turn_stop: 'contact:1' });
+    await response.settle({
+      game_number: 1,
+      turn_number: 3,
+      active_seat: 'host',
+      turn_stop: 'contact:1',
+    });
 
-    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', { turn_stop: 'contact:1' });
+    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', {
+      turn_stop: 'contact:1',
+      game_number: 1,
+    });
     expect(result.current.cursor).toEqual(served({ turn_stop: 'contact:1' }));
   });
 
@@ -61,7 +70,12 @@ describe('useTurnCursor', () => {
 
     act(() => result.current.advance(vi.fn()));
     act(() => result.current.advance(vi.fn()));
-    await response.settle({ turn_number: 3, active_seat: 'host', turn_stop: 'contact:1' });
+    await response.settle({
+      game_number: 1,
+      turn_number: 3,
+      active_seat: 'host',
+      turn_stop: 'contact:1',
+    });
 
     expect(posted).toHaveBeenCalledOnce();
   });
@@ -73,7 +87,12 @@ describe('useTurnCursor', () => {
 
     act(() => result.current.advance(onTurnStart));
     expect(onTurnStart).not.toHaveBeenCalled();
-    await response.settle({ turn_number: 3, active_seat: 'host', turn_stop: 'main' });
+    await response.settle({
+      game_number: 1,
+      turn_number: 3,
+      active_seat: 'host',
+      turn_stop: 'main',
+    });
 
     expect(onTurnStart).toHaveBeenCalledExactlyOnceWith(true);
   });
@@ -84,7 +103,12 @@ describe('useTurnCursor', () => {
     const response = pending();
 
     act(() => result.current.advance(onTurnStart));
-    await response.settle({ turn_number: 1, active_seat: 'host', turn_stop: 'main' });
+    await response.settle({
+      game_number: 1,
+      turn_number: 1,
+      active_seat: 'host',
+      turn_stop: 'main',
+    });
 
     expect(onTurnStart).toHaveBeenCalledExactlyOnceWith(false);
   });
@@ -95,9 +119,17 @@ describe('useTurnCursor', () => {
     const response = pending();
 
     act(() => result.current.advance(onTurnStart));
-    await response.settle({ turn_number: 4, active_seat: 'guest', turn_stop: null });
+    await response.settle({
+      game_number: 1,
+      turn_number: 4,
+      active_seat: 'guest',
+      turn_stop: null,
+    });
 
-    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', { ends_turn: true });
+    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', {
+      ends_turn: true,
+      game_number: 1,
+    });
     expect(onTurnStart).not.toHaveBeenCalled();
     expect(result.current.cursor.my_turn).toBe(false);
   });
@@ -116,9 +148,17 @@ describe('useTurnCursor', () => {
     const response = pending();
 
     act(() => result.current.stepBack());
-    await response.settle({ turn_number: 3, active_seat: 'host', turn_stop: 'contact:1' });
+    await response.settle({
+      game_number: 1,
+      turn_number: 3,
+      active_seat: 'host',
+      turn_stop: 'contact:1',
+    });
 
-    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', { turn_stop: 'contact:1' });
+    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', {
+      turn_stop: 'contact:1',
+      game_number: 1,
+    });
   });
 
   it('reloads the cursor when a move is refused, and takes presses again', async () => {
@@ -147,7 +187,14 @@ describe('useTurnCursor', () => {
     expect(onTurnStart).not.toHaveBeenCalled();
 
     rerender({ cursor: served({ turn_stop: 'main' }) });
-    act(() => result.current.receive({ turn_number: 3, active_seat: 'host', turn_stop: 'main' }));
+    act(() =>
+      result.current.receive({
+        game_number: 1,
+        turn_number: 3,
+        active_seat: 'host',
+        turn_stop: 'main',
+      })
+    );
 
     expect(onTurnStart).toHaveBeenCalledExactlyOnceWith(true);
   });
@@ -160,7 +207,14 @@ describe('useTurnCursor', () => {
 
     act(() => result.current.advance(onTurnStart));
     await response.fail();
-    act(() => result.current.receive({ turn_number: 3, active_seat: 'host', turn_stop: 'main' }));
+    act(() =>
+      result.current.receive({
+        game_number: 1,
+        turn_number: 3,
+        active_seat: 'host',
+        turn_stop: 'main',
+      })
+    );
     rerender({ cursor: served({ turn_stop: 'main' }) });
 
     expect(onTurnStart).toHaveBeenCalledExactlyOnceWith(true);
@@ -173,7 +227,14 @@ describe('useTurnCursor', () => {
     const response = pending();
 
     act(() => result.current.advance(onTurnStart));
-    act(() => result.current.receive({ turn_number: 1, active_seat: 'host', turn_stop: 'main' }));
+    act(() =>
+      result.current.receive({
+        game_number: 1,
+        turn_number: 1,
+        active_seat: 'host',
+        turn_stop: 'main',
+      })
+    );
     expect(onTurnStart).not.toHaveBeenCalled();
     await response.fail();
 
@@ -189,7 +250,14 @@ describe('useTurnCursor', () => {
     act(() => result.current.advance(onTurnStart));
     await response.fail();
     rerender({ cursor: served() });
-    act(() => result.current.receive({ turn_number: 3, active_seat: 'host', turn_stop: 'main' }));
+    act(() =>
+      result.current.receive({
+        game_number: 1,
+        turn_number: 3,
+        active_seat: 'host',
+        turn_stop: 'main',
+      })
+    );
 
     expect(onTurnStart).not.toHaveBeenCalled();
   });
@@ -204,8 +272,15 @@ describe('useTurnCursor', () => {
     await failed.fail();
     const retry = pending();
     act(() => result.current.advance(onTurnStart));
-    act(() => result.current.receive({ turn_number: 3, active_seat: 'host', turn_stop: 'main' }));
-    await retry.settle({ turn_number: 3, active_seat: 'host', turn_stop: 'main' });
+    act(() =>
+      result.current.receive({
+        game_number: 1,
+        turn_number: 3,
+        active_seat: 'host',
+        turn_stop: 'main',
+      })
+    );
+    await retry.settle({ game_number: 1, turn_number: 3, active_seat: 'host', turn_stop: 'main' });
 
     expect(onTurnStart).toHaveBeenCalledOnce();
   });
@@ -213,7 +288,14 @@ describe('useTurnCursor', () => {
   it('hands you the turn when the opponent ends theirs', () => {
     const { result } = mount(served({ active_seat: 'guest', my_turn: false, turn_stop: 'end' }));
 
-    act(() => result.current.receive({ turn_number: 4, active_seat: 'host', turn_stop: null }));
+    act(() =>
+      result.current.receive({
+        game_number: 1,
+        turn_number: 4,
+        active_seat: 'host',
+        turn_stop: null,
+      })
+    );
 
     expect(result.current.cursor).toEqual(served({ turn_number: 4 }));
   });
@@ -221,7 +303,14 @@ describe('useTurnCursor', () => {
   it('ignores a cursor from a turn already over', () => {
     const { result } = mount(served({ turn_number: 4, active_seat: 'guest', my_turn: false }));
 
-    act(() => result.current.receive({ turn_number: 3, active_seat: 'host', turn_stop: 'end' }));
+    act(() =>
+      result.current.receive({
+        game_number: 1,
+        turn_number: 3,
+        active_seat: 'host',
+        turn_stop: 'end',
+      })
+    );
 
     expect(result.current.cursor).toEqual(
       served({ turn_number: 4, active_seat: 'guest', my_turn: false })
@@ -241,8 +330,17 @@ describe('useTurnCursor', () => {
       served({ turn_number: 0, active_seat: null, my_turn: false })
     );
 
-    act(() => result.current.receive({ turn_number: 1, active_seat: 'guest', turn_stop: 'main' }));
-    rerender({ cursor: served({ turn_number: 0, active_seat: null, my_turn: false }) });
+    act(() =>
+      result.current.receive({
+        game_number: 1,
+        turn_number: 1,
+        active_seat: 'guest',
+        turn_stop: 'main',
+      })
+    );
+    rerender({
+      cursor: served({ turn_number: 0, active_seat: null, my_turn: false }),
+    });
 
     expect(result.current.cursor).toEqual(
       served({ turn_number: 1, active_seat: 'guest', turn_stop: 'main', my_turn: false })
@@ -252,10 +350,113 @@ describe('useTurnCursor', () => {
   it('takes a reloaded cursor from the same turn or a later one', () => {
     const { result, rerender } = mount(served({ turn_stop: 'main' }));
 
-    rerender({ cursor: served({ turn_number: 4, active_seat: 'guest', my_turn: false }) });
+    rerender({
+      cursor: served({ turn_number: 4, active_seat: 'guest', my_turn: false }),
+    });
 
     expect(result.current.cursor).toEqual(
       served({ turn_number: 4, active_seat: 'guest', my_turn: false })
     );
+  });
+
+  describe('into the next game of a Bo3', () => {
+    const lateInGameOne = served({ turn_number: 7, active_seat: 'guest', my_turn: false });
+
+    it('takes game 2 turn 1 from the channel while holding game 1 turn 7', () => {
+      const { result } = mount(lateInGameOne);
+
+      act(() =>
+        result.current.receive({
+          game_number: 2,
+          turn_number: 1,
+          active_seat: 'host',
+          turn_stop: 'main',
+        })
+      );
+
+      expect(result.current.cursor).toEqual(
+        served({ game_number: 2, turn_number: 1, turn_stop: 'main' })
+      );
+    });
+
+    it('takes the reloaded cursor for the new game', () => {
+      const { result, rerender } = mount(lateInGameOne);
+
+      const fresh = served({ game_number: 2, turn_number: 0, active_seat: null, my_turn: false });
+      rerender({ cursor: fresh });
+
+      expect(result.current.cursor).toEqual(fresh);
+    });
+
+    it('ignores a late echo from game 1 once game 2 has begun', () => {
+      const { result } = mount(served({ game_number: 2, turn_number: 1, turn_stop: 'main' }));
+
+      act(() =>
+        result.current.receive({
+          game_number: 1,
+          turn_number: 7,
+          active_seat: 'guest',
+          turn_stop: 'end',
+        })
+      );
+
+      expect(result.current.cursor.game_number).toBe(2);
+    });
+
+    it('starts a turn in game 2 that has the same number as one already started in game 1', async () => {
+      const { result, rerender } = mount(served({ turn_number: 2 }));
+      const onTurnStart = vi.fn();
+
+      const first = pending();
+      act(() => result.current.advance(onTurnStart));
+      await first.settle({
+        game_number: 1,
+        turn_number: 2,
+        active_seat: 'host',
+        turn_stop: 'main',
+      });
+
+      rerender({ cursor: served({ game_number: 2, turn_number: 2 }) });
+      const second = pending();
+      act(() => result.current.advance(onTurnStart));
+      await second.settle({
+        game_number: 2,
+        turn_number: 2,
+        active_seat: 'host',
+        turn_stop: 'main',
+      });
+
+      expect(onTurnStart).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('stale games', () => {
+    it('sends the game its cursor is for', async () => {
+      const { result } = mount(served({ game_number: 2, turn_stop: 'main' }));
+      const response = pending();
+
+      act(() => result.current.advance(vi.fn()));
+      await response.settle({
+        game_number: 2,
+        turn_number: 3,
+        active_seat: 'host',
+        turn_stop: 'contact:1',
+      });
+
+      expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', {
+        turn_stop: 'contact:1',
+        game_number: 2,
+      });
+    });
+
+    it('reloads into the current game when a move is refused for an earlier one', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      posted.mockRejectedValueOnce(Object.assign(new Error('409'), { response: { status: 409 } }));
+      const { result } = mount(served({ turn_stop: 'main' }));
+
+      await act(async () => result.current.advance(vi.fn()));
+
+      expect(router.reload).toHaveBeenCalledWith({ only: ['game', 'cursor', 'turnOrder'] });
+    });
   });
 });

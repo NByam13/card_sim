@@ -18,14 +18,16 @@ export type CardLookup = (cardNumber: string) => Promise<Card | null>;
  */
 export function useMirror(
   lookup: CardLookup,
-  initial?: PublicState | null
+  initial?: PublicState | null,
+  /** The game `initial` was saved in. */
+  gameNumber = 1
 ): {
   mirror: MirrorState | null;
   receive: (frame: StateFrame) => void;
 } {
   const [state, setState] = useState<PublicState | null>(initial ?? null);
   const [cards, setCards] = useState<ReadonlyMap<string, Card>>(new Map());
-  const cursor = useRef<FrameCursor | null>(null);
+  const cursor = useRef<FrameCursor>({ game_number: gameNumber, session: null, seq: 0 });
   // Numbers already asked for, so a card being in flight does not start a second
   // request on every frame that arrives meanwhile.
   const pending = useRef(new Set<string>());
@@ -33,18 +35,24 @@ export function useMirror(
   const receive = useCallback((frame: StateFrame) => {
     if (!shouldAcceptFrame(cursor.current, frame)) return;
 
-    cursor.current = { session: frame.session, seq: frame.seq };
+    cursor.current = { game_number: frame.game_number, session: frame.session, seq: frame.seq };
     setState(frame.state);
   }, []);
 
   // A fresh server snapshot replaces the mirror and resets ordering: it may lag
   // the live frames by a save debounce, and the next frame corrects it. A null
   // snapshot clears it rather than leaving the last one standing — the server
-  // having no board for that seat is an answer, not a missing one.
+  // having no board for that seat is an answer, not a missing one. Except where
+  // it is older news: a snapshot for an earlier game than the frames already
+  // here, or an empty one for a game whose new deal has already arrived.
   useEffect(() => {
-    cursor.current = null;
+    const held = cursor.current;
+    if (held.game_number > gameNumber) return;
+    if (initial == null && held.game_number === gameNumber && held.session !== null) return;
+
+    cursor.current = { game_number: gameNumber, session: null, seq: 0 };
     setState(initial ?? null);
-  }, [initial]);
+  }, [initial, gameNumber]);
 
   const lookupRef = useRef(lookup);
   lookupRef.current = lookup;

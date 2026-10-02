@@ -47,7 +47,8 @@ function publicState(zones: Partial<Record<string, WireInstance[]>> = {}): Publi
   };
 }
 
-const frame = (seq: number, state: PublicState, session = 's1'): StateFrame => ({
+const frame = (seq: number, state: PublicState, session = 's1', game_number = 1): StateFrame => ({
+  game_number,
   session,
   seq,
   state,
@@ -193,5 +194,62 @@ describe('useMirror', () => {
 
     expect(result.current.mirror?.counts).toEqual({ library: 41, hand: 5, sceneDeck: 14 });
     await settle();
+  });
+
+  describe('across games of a Bo3', () => {
+    type Props = { initial: PublicState | null; gameNumber: number };
+
+    const mirrorOf = (initial: PublicState | null, gameNumber: number) =>
+      renderHook(({ initial, gameNumber }: Props) => useMirror(resolver(), initial, gameNumber), {
+        initialProps: { initial, gameNumber },
+      });
+
+    it('keeps the new deal when the reload into its game lands after it', async () => {
+      const lastOfGameOne = publicState({ adventureC: [wire({ uid: 'game-1' })] });
+      const { result, rerender } = mirrorOf(lastOfGameOne, 1);
+
+      act(() =>
+        result.current.receive(
+          frame(1, publicState({ adventureC: [wire({ uid: 'game-2' })] }), 's2', 2)
+        )
+      );
+      rerender({ initial: null, gameNumber: 2 });
+
+      expect(result.current.mirror?.zones.adventureC[0].uid).toBe('game-2');
+      await settle();
+    });
+
+    it('clears when the reload into the next game lands before any new deal', async () => {
+      const { result, rerender } = mirrorOf(publicState({ adventureC: [wire()] }), 1);
+
+      rerender({ initial: null, gameNumber: 2 });
+
+      expect(result.current.mirror).toBeNull();
+      await settle();
+    });
+
+    it('ignores a board from the last game once the next one has begun', async () => {
+      const { result, rerender } = mirrorOf(publicState(), 1);
+      rerender({ initial: null, gameNumber: 2 });
+
+      act(() => result.current.receive(frame(40, publicState({ adventureC: [wire()] }), 's1', 1)));
+
+      expect(result.current.mirror).toBeNull();
+      await settle();
+    });
+
+    it('ignores a snapshot from an earlier game than the boards already here', async () => {
+      const { result, rerender } = mirrorOf(null, 2);
+      act(() =>
+        result.current.receive(
+          frame(1, publicState({ adventureC: [wire({ uid: 'game-2' })] }), 's2', 2)
+        )
+      );
+
+      rerender({ initial: publicState({ adventureC: [wire({ uid: 'game-1' })] }), gameNumber: 1 });
+
+      expect(result.current.mirror?.zones.adventureC[0].uid).toBe('game-2');
+      await settle();
+    });
   });
 });

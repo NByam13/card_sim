@@ -1,8 +1,8 @@
 import { claim as claimRoute } from '@/actions/App/Http/Controllers/GameResultController';
-import { router } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { mainCharacterOnFinalStage } from '../mlp/victory';
 import { GameState } from '../types';
+import { reloadIntoCurrentGame } from './reload';
 import { postJson } from './useGameSync';
 
 /**
@@ -15,10 +15,13 @@ import { postJson } from './useGameSync';
  */
 export function useWinClaim({
   code,
+  gameNumber,
   restoring,
   enabled,
 }: {
   code: string;
+  /** The game being claimed. A claim for one already over is refused. */
+  gameNumber: number;
   /** The board the arena mounts with, or null for a fresh deal. */
   restoring: GameState | null;
   /** Whether a claim could be accepted now: a live match, with this game undecided. */
@@ -70,7 +73,7 @@ export function useWinClaim({
     setBusy(true);
     setError(null);
 
-    postJson(claimRoute.url(code), {})
+    postJson(claimRoute.url(code), { game_number: gameNumber })
       .then(() => setPrompting(false))
       .catch((failure) => {
         console.error('failed to claim the win', failure);
@@ -79,9 +82,9 @@ export function useWinClaim({
       .finally(() => {
         inFlight.current = false;
         setBusy(false);
-        router.reload({ only: ['game'] });
+        reloadIntoCurrentGame();
       });
-  }, [code]);
+  }, [code, gameNumber]);
 
   return {
     watch,

@@ -64,6 +64,7 @@ const member = (role: Member['role'], id: string = role): Member => ({ id, role,
 
 const frame = (seat: Seat, seq = 1): StateFrame & { seat: Seat } => ({
   seat,
+  game_number: 1,
   session: 's1',
   seq,
   state: { zones: {}, counts: {}, turn: 1, started: true } as unknown as PublicState,
@@ -197,6 +198,7 @@ describe('useGameSync', () => {
     act(() => presence.bound.events['.board.state']?.(frame('guest', 4)));
 
     expect(onFrame).toHaveBeenCalledWith({
+      game_number: 1,
       session: 's1',
       seq: 4,
       state: expect.anything(),
@@ -230,10 +232,12 @@ describe('useGameSync', () => {
     const roll = { host: [6, 5], guest: [2, 1], winner: 'host', rerolls: 0 };
 
     act(() => presence.bound.events['.turn_order.rolled']?.({ roll }));
-    act(() => presence.bound.events['.turn_order.decided']?.({ first_player: 'guest' }));
+    act(() =>
+      presence.bound.events['.turn_order.decided']?.({ first_player: 'guest', game_number: 2 })
+    );
 
     expect(onTurnOrderRolled).toHaveBeenCalledWith(roll);
-    expect(onTurnOrderDecided).toHaveBeenCalledWith('guest');
+    expect(onTurnOrderDecided).toHaveBeenCalledWith('guest', 2);
   });
 
   /**
@@ -317,10 +321,10 @@ describe('listenForTurns', () => {
     listenForTurns(presence, listeners);
     presence.bound.events['.turn.advanced']?.({ cursor });
     presence.bound.events['.turn_order.rolled']?.({ roll });
-    presence.bound.events['.turn_order.decided']?.({ first_player: 'guest' });
+    presence.bound.events['.turn_order.decided']?.({ first_player: 'guest', game_number: 2 });
 
     expect(listeners.onTurnAdvanced).toHaveBeenCalledWith(cursor);
     expect(listeners.onTurnOrderRolled).toHaveBeenCalledWith(roll);
-    expect(listeners.onTurnOrderDecided).toHaveBeenCalledWith('guest');
+    expect(listeners.onTurnOrderDecided).toHaveBeenCalledWith('guest', 2);
   });
 });

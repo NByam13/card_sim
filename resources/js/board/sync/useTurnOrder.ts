@@ -6,6 +6,7 @@ import { router } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Seat } from '@/types/game';
 import { TurnOrder, TurnOrderRoll } from './types';
+import { reloadIntoCurrentGame } from './reload';
 import { postJson } from './useGameSync';
 
 const sameDice = (a: number[], b: number[]) =>
@@ -27,11 +28,15 @@ const sameRoll = (a: TurnOrderRoll, b: TurnOrderRoll) =>
  *
  * The cursor on the page predates the decision, so the first time a decision
  * lands the `cursor` prop is reloaded.
+ *
+ * Each game of a Bo3 decides turn order afresh, so everything is ordered by game
+ * first. Within a game the roll and the decision are written once, so a reload
+ * answered before one of them arrived never takes it back.
  */
 export function useTurnOrder({ code, turnOrder: served }: { code: string; turnOrder: TurnOrder }): {
   turnOrder: TurnOrder;
   receiveRoll: (roll: TurnOrderRoll) => void;
-  receiveDecided: (firstPlayer: Seat) => void;
+  receiveDecided: (firstPlayer: Seat, gameNumber: number) => void;
   roll: () => void;
   elect: (firstPlayer: Seat) => void;
 } {
@@ -44,23 +49,48 @@ export function useTurnOrder({ code, turnOrder: served }: { code: string; turnOr
     setTurnOrder(next);
   }, []);
 
-  useEffect(() => apply(served), [apply, served]);
+  useEffect(() => {
+    const held = latest.current;
+    if (served.game_number < held.game_number) return;
 
+    apply(
+      served.game_number > held.game_number
+        ? served
+        : {
+            ...served,
+            roll: served.roll ?? held.roll,
+            first_player: served.first_player ?? held.first_player,
+            chooser: served.chooser ?? held.chooser,
+          }
+    );
+  }, [apply, served]);
+
+  // Only game 1 rolls, so a roll can only belong to it.
   const receiveRoll = useCallback(
     (roll: TurnOrderRoll) => {
+      if (latest.current.game_number !== 1) return;
       const current = latest.current.roll;
       if (current && sameRoll(current, roll)) return;
 
-      apply({ ...latest.current, roll });
+      apply({ ...latest.current, roll, chooser: roll.winner });
     },
     [apply]
   );
 
   const receiveDecided = useCallback(
-    (firstPlayer: Seat) => {
-      if (latest.current.first_player === firstPlayer) return;
+    (firstPlayer: Seat, gameNumber: number) => {
+      const held = latest.current;
+      if (gameNumber < held.game_number) return;
+      if (gameNumber === held.game_number && held.first_player === firstPlayer) return;
 
-      apply({ ...latest.current, first_player: firstPlayer });
+      if (gameNumber > held.game_number) {
+        // Decided for a game this page has not reloaded into yet.
+        apply({ game_number: gameNumber, roll: null, first_player: firstPlayer, chooser: null });
+        reloadIntoCurrentGame();
+        return;
+      }
+
+      apply({ ...held, first_player: firstPlayer });
       router.reload({ only: ['cursor'] });
     },
     [apply]
@@ -74,7 +104,7 @@ export function useTurnOrder({ code, turnOrder: served }: { code: string; turnOr
       .then(onDone)
       .catch((error) => {
         console.error('failed to settle turn order', error);
-        router.reload({ only: ['turnOrder', 'cursor'] });
+        reloadIntoCurrentGame();
       })
       .finally(() => {
         inFlight.current = false;
@@ -91,10 +121,10 @@ export function useTurnOrder({ code, turnOrder: served }: { code: string; turnOr
 
   const elect = useCallback(
     (firstPlayer: Seat) =>
-      send<{ first_player: Seat }>(
+      send<{ first_player: Seat; game_number: number }>(
         electRoute.url(code),
-        { first_player: firstPlayer },
-        (response) => receiveDecided(response.first_player)
+        { first_player: firstPlayer, game_number: latest.current.game_number },
+        (response) => receiveDecided(response.first_player, response.game_number)
       ),
     [code, send, receiveDecided]
   );

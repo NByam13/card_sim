@@ -35,6 +35,7 @@ class BoardSyncTest extends TestCase
     private function frame(int $seq = 1): array
     {
         return [
+            'game_number' => 1,
             'session' => 'session-1',
             'seq' => $seq,
             'state' => ['zones' => ['reveal' => []], 'counts' => ['hand' => 5], 'turn' => 2],
@@ -58,7 +59,20 @@ class BoardSyncTest extends TestCase
 
         Event::assertDispatched(BoardStateUpdated::class, fn (BoardStateUpdated $event) => $event->seat === Seat::Host
             && $event->seq === 3
-            && $event->session === 'session-1');
+            && $event->session === 'session-1'
+            && $event->broadcastWith()['game_number'] === 1);
+    }
+
+    public function test_a_board_from_an_earlier_game_is_not_relayed(): void
+    {
+        Event::fake([BoardStateUpdated::class]);
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->bo3()->gamesWonBy(Seat::Guest)->create();
+
+        $this->asHost($game)
+            ->postJson("/games/{$game->code}/sync", $this->frame())
+            ->assertConflict();
+
+        Event::assertNotDispatched(BoardStateUpdated::class);
     }
 
     /**
@@ -116,6 +130,7 @@ class BoardSyncTest extends TestCase
 
         $this->asHost($game)
             ->postJson("/games/{$game->code}/state", [
+                'game_number' => 1,
                 'seq' => 7,
                 'state' => ['zones' => ['hand' => [['uid' => 'u1', 'cardNumber' => 'TEST-C01']]]],
                 'public_state' => ['counts' => ['hand' => 1]],
@@ -135,6 +150,7 @@ class BoardSyncTest extends TestCase
 
         $this->asHost($game)
             ->postJson("/games/{$game->code}/state", [
+                'game_number' => 1,
                 'seq' => 1,
                 'state' => ['zones' => []],
                 'public_state' => ['counts' => []],
@@ -144,11 +160,28 @@ class BoardSyncTest extends TestCase
         $this->assertNull($game->fresh()->stateFor(Seat::Guest));
     }
 
+    public function test_a_save_from_an_earlier_game_is_refused(): void
+    {
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->bo3()->gamesWonBy(Seat::Guest)->create();
+
+        $this->asHost($game)
+            ->postJson("/games/{$game->code}/state", [
+                'game_number' => 1,
+                'seq' => 9,
+                'state' => ['zones' => []],
+                'public_state' => ['counts' => []],
+            ])
+            ->assertConflict();
+
+        $this->assertNull($game->fresh()->stateFor(Seat::Host));
+    }
+
     public function test_a_watcher_cannot_save_a_board(): void
     {
         $game = $this->activeGame();
 
         $this->postJson("/games/{$game->code}/state", [
+            'game_number' => 1,
             'seq' => 1,
             'state' => ['zones' => []],
             'public_state' => ['counts' => []],
@@ -164,6 +197,7 @@ class BoardSyncTest extends TestCase
 
         $this->asHost($game)
             ->postJson("/games/{$game->code}/state", [
+                'game_number' => 1,
                 'seq' => 1,
                 'state' => ['zones' => []],
                 'public_state' => ['counts' => []],
@@ -233,6 +267,7 @@ class BoardSyncTest extends TestCase
     public static function badFrames(): array
     {
         return [
+            'no game number' => [['session' => 's', 'seq' => 1, 'state' => []]],
             'no session' => [['seq' => 1, 'state' => []]],
             'no seq' => [['session' => 's', 'state' => []]],
             'negative seq' => [['session' => 's', 'seq' => -1, 'state' => []]],

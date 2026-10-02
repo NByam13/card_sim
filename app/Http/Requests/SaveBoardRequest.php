@@ -5,10 +5,10 @@ namespace App\Http\Requests;
 /**
  * A seat's board, whole and redacted, saved so a refresh resumes it.
  */
-class SaveBoardRequest extends ActiveSeatRequest
+class SaveBoardRequest extends GameScopedRequest
 {
     /** @return array<string, mixed> */
-    public function rules(): array
+    protected function gameRules(): array
     {
         return [
             'seq' => ['required', 'integer', 'min:0'],
