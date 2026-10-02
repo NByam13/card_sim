@@ -39,10 +39,13 @@ const isOlder = (a: WireCursor, b: WireCursor) =>
  */
 export function useTurnCursor({
   code,
+  matchNumber,
   seat,
   cursor: served,
 }: {
   code: string;
+  /** The match in progress. A rematch starts the game number over. */
+  matchNumber?: number;
   seat: Seat;
   /** The cursor on the show payload. A new object means a fresh one from the server. */
   cursor: TurnCursor;
@@ -126,6 +129,7 @@ export function useTurnCursor({
 
       postJson<{ cursor: WireCursor }>(advanceRoute.url(code), {
         ...move,
+        match_number: matchNumber,
         game_number: latest.current.game_number,
       })
         .then(({ cursor: moved }) => {
@@ -149,7 +153,7 @@ export function useTurnCursor({
           inFlight.current = false;
         });
     },
-    [code, receive, settleHeld, start]
+    [code, matchNumber, receive, settleHeld, start]
   );
 
   const advance = useCallback(

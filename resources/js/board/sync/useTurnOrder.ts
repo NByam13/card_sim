@@ -33,7 +33,16 @@ const sameRoll = (a: TurnOrderRoll, b: TurnOrderRoll) =>
  * first. Within a game the roll and the decision are written once, so a reload
  * answered before one of them arrived never takes it back.
  */
-export function useTurnOrder({ code, turnOrder: served }: { code: string; turnOrder: TurnOrder }): {
+export function useTurnOrder({
+  code,
+  matchNumber,
+  turnOrder: served,
+}: {
+  code: string;
+  /** The match in progress. A rematch starts the game number over. */
+  matchNumber?: number;
+  turnOrder: TurnOrder;
+}): {
   turnOrder: TurnOrder;
   receiveRoll: (roll: TurnOrderRoll) => void;
   receiveDecided: (firstPlayer: Seat, gameNumber: number) => void;
@@ -123,10 +132,14 @@ export function useTurnOrder({ code, turnOrder: served }: { code: string; turnOr
     (firstPlayer: Seat) =>
       send<{ first_player: Seat; game_number: number }>(
         electRoute.url(code),
-        { first_player: firstPlayer, game_number: latest.current.game_number },
+        {
+          first_player: firstPlayer,
+          match_number: matchNumber,
+          game_number: latest.current.game_number,
+        },
         (response) => receiveDecided(response.first_player, response.game_number)
       ),
-    [code, send, receiveDecided]
+    [code, matchNumber, send, receiveDecided]
   );
 
   return { turnOrder, receiveRoll, receiveDecided, roll, elect };

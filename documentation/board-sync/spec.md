@@ -2,7 +2,7 @@
 
 **Status:** Built and merged (PR #4). Two browsers played a match on the branch; manually verified.
 **Branch:** `feat/board-sync`
-**Last updated:** 2026-09-29
+**Last updated:** 2026-10-02
 
 ## Summary
 
@@ -203,6 +203,26 @@ already enforces.
 
 It stays for a seat playing alone and is absent once a match is live.
 
+### A rematch is the same row, starting over
+
+Decided in PON-70. Playing again keeps the link, the seats, the decks and the format, and is the
+match handshake run a second time rather than a second mechanism:
+
+- **Finishing a match clears both acceptances.** They were answers to that match. On a finished
+  row they mean "has asked for a rematch", and the lobby's invitation and waiting copy read the
+  same way they did before the first match.
+- **The second acceptance resets the row**: game 1, no results, no winner, turn order rolled
+  again, both boards cleared so both halves re-deal. Until then the final position stays saved,
+  and each seat keeps the other's last board in its mirror.
+- **`match_number` counts the matches on a row.** A rematch starts `game_number` over, so on its
+  own it can no longer say which game a request was made in. The page remounts per match, and a
+  game-scoped request naming an earlier match is refused like one naming an earlier game.
+- **A different deck or format is a new game**, with a new link. A rematch is the same match
+  played again.
+- **Rejected: a new row with a new link.** It keeps a result nobody can browse to, since the app
+  has no match history. And each seat would need a new token issued into its session for the new
+  code, with watchers redirected by broadcast.
+
 ### The mirror has its own zoom
 
 Your half and their half are separate surfaces, looked at differently: one is where you work, the
@@ -236,6 +256,7 @@ Columns this slice adds to `games`, per the PvP spec's table:
 | `host_accepted_at` / `guest_accepted_at` | timestamp, nullable | When this seat accepted the match. Both set means it is live |
 
 `turn_stop`, `winner_seat` and the scoring columns stay absent until the slices that use them.
+`match_number` arrived with the rematch, per the decision above.
 
 ## API / routes
 
@@ -283,7 +304,7 @@ there is, so the mirror is a mode of the same component, never a second componen
   action in which one seat's shuffle reaches the other's library, and there must never be one —
   which is the same rule the redaction choke point already enforces from the other side.
 - **What does "restart" mean with two seats?** Nothing. It is a solo affordance and is absent from
-  a live match, per the decision above. The rematch reading still belongs to the scoring slice.
+  a live match, per the decision above. Playing again is a rematch, also above.
 - **Does the mirror need its own zoom?** Yes, with its own cookie. See the decision above.
 
 ## Still open

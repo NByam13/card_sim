@@ -22,6 +22,9 @@ class ActiveSeatRequest extends FormRequest
 
     protected string $notActive = 'Both seats need to be taken first.';
 
+    /** @var list<GameStatus> The game statuses this request is allowed in. */
+    protected array $statuses = [GameStatus::Active];
+
     public function authorize(): Response
     {
         $seat = $this->heldSeat();
@@ -30,7 +33,7 @@ class ActiveSeatRequest extends FormRequest
             return Response::deny($this->notSeated);
         }
 
-        if ($this->game()->status !== GameStatus::Active) {
+        if (! in_array($this->game()->status, $this->statuses, true)) {
             return Response::deny($this->notActive);
         }
 

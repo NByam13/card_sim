@@ -15,11 +15,14 @@ import { postJson } from './useGameSync';
  */
 export function useWinClaim({
   code,
+  matchNumber,
   gameNumber,
   restoring,
   enabled,
 }: {
   code: string;
+  /** The match in progress. A rematch starts the game number over. */
+  matchNumber?: number;
   /** The game being claimed. A claim for one already over is refused. */
   gameNumber: number;
   /** The board the arena mounts with, or null for a fresh deal. */
@@ -73,7 +76,7 @@ export function useWinClaim({
     setBusy(true);
     setError(null);
 
-    postJson(claimRoute.url(code), { game_number: gameNumber })
+    postJson(claimRoute.url(code), { match_number: matchNumber, game_number: gameNumber })
       .then(() => setPrompting(false))
       .catch((failure) => {
         console.error('failed to claim the win', failure);
@@ -84,7 +87,7 @@ export function useWinClaim({
         setBusy(false);
         reloadIntoCurrentGame();
       });
-  }, [code, gameNumber]);
+  }, [code, matchNumber, gameNumber]);
 
   return {
     watch,

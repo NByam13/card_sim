@@ -33,6 +33,7 @@ use LogicException;
  * @property Seat|null $active_seat
  * @property string|null $turn_stop
  * @property MatchFormat $format
+ * @property int $match_number
  * @property int $game_number
  * @property list<array{game: int, winner: 'host'|'guest', reason: 'story'|'concede'}> $game_results
  * @property Seat|null $winner_seat
@@ -74,6 +75,7 @@ class Game extends Model
         'active_seat',
         'turn_stop',
         'format',
+        'match_number',
         'game_number',
         'game_results',
         'winner_seat',
@@ -91,6 +93,7 @@ class Game extends Model
         'status' => GameStatus::Waiting->value,
         'turn_number' => 0,
         'format' => MatchFormat::Bo1->value,
+        'match_number' => 1,
         'game_number' => 1,
         'game_results' => '[]',
     ];
@@ -118,6 +121,7 @@ class Game extends Model
             'turn_number' => 'integer',
             'active_seat' => Seat::class,
             'format' => MatchFormat::class,
+            'match_number' => 'integer',
             'game_number' => 'integer',
             'game_results' => 'array',
             'winner_seat' => Seat::class,
@@ -277,6 +281,12 @@ class Game extends Model
             return;
         }
 
+        if ($this->status === GameStatus::Finished) {
+            $this->acceptRematchFor($seat);
+
+            return;
+        }
+
         $this->forceFill([
             $seat->column('accepted_at') => now(),
             'last_activity_at' => now(),
@@ -288,6 +298,30 @@ class Game extends Model
         if ($this->matchIsLive()) {
             $this->forceFill($this->clearedBoard($seat->opposing()))->save();
         }
+    }
+
+    /**
+     * Accept a rematch of a finished match. The boards stay until both seats
+     * have, so the final position is still on the table meanwhile.
+     *
+     * Each seat tries the reset after its own write, guarded on both answers
+     * and the match still being over, so two seats accepting at once start
+     * exactly one rematch.
+     */
+    private function acceptRematchFor(Seat $seat): void
+    {
+        $this->forceFill([
+            $seat->column('accepted_at') => now(),
+            'last_activity_at' => now(),
+        ])->save();
+
+        $matchNumber = $this->match_number;
+
+        $this->fillWhere($this->nextMatch(), fn (Builder $query) => $query
+            ->where('status', GameStatus::Finished)
+            ->where('match_number', $matchNumber)
+            ->whereNotNull('host_accepted_at')
+            ->whereNotNull('guest_accepted_at'));
     }
 
     /**
@@ -393,12 +427,46 @@ class Game extends Model
         ]];
 
         $values += $this->winsFor($winnerSeat) + 1 >= $this->gamesToWin()
-            ? ['status' => GameStatus::Finished, 'winner_seat' => $winnerSeat]
+            ? $this->matchOver($winnerSeat)
             : $this->nextGame();
 
         return $this->fillWhere($values, fn (Builder $query) => $query
             ->where('status', GameStatus::Active)
             ->whereJsonLength('game_results', $recorded));
+    }
+
+    /**
+     * The columns that end the match. Both acceptances go with it: the answers
+     * were to this match, and a rematch asks the same question again.
+     *
+     * @return array<string, mixed>
+     */
+    private function matchOver(Seat $winnerSeat): array
+    {
+        return [
+            'status' => GameStatus::Finished,
+            'winner_seat' => $winnerSeat,
+            'host_accepted_at' => null,
+            'guest_accepted_at' => null,
+        ];
+    }
+
+    /**
+     * The columns that start a rematch: the next match from game 1, with the
+     * score and the winner gone.
+     *
+     * @return array<string, mixed>
+     */
+    private function nextMatch(): array
+    {
+        return [
+            ...$this->nextGame(),
+            'status' => GameStatus::Active,
+            'match_number' => $this->match_number + 1,
+            'game_number' => 1,
+            'game_results' => [],
+            'winner_seat' => null,
+        ];
     }
 
     /**

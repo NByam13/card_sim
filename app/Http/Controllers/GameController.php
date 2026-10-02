@@ -112,9 +112,10 @@ class GameController extends Controller
      * Accept the match: this seat is ready to play the other one.
      *
      * A seat arriving from the lobby calls this on arrival, having no board to
-     * lose. A seat playing alone calls it when the player says so. The board is
-     * re-dealt in the browser either way — the server only records the answer
-     * and tells the other seat.
+     * lose. A seat playing alone calls it when the player says so, and so does a
+     * seat asking for a rematch once the match is over. The board is re-dealt in
+     * the browser either way — the server only records the answer and tells the
+     * other seat.
      */
     public function accept(Game $game, AcceptMatchRequest $request): RedirectResponse
     {
@@ -173,12 +174,15 @@ class GameController extends Controller
             'setup' => $game->setup,
             'status' => $game->status,
             'format' => $game->format,
+            'match_number' => $game->match_number,
             'game_number' => $game->game_number,
             'games_to_win' => $game->gamesToWin(),
             'wins' => [
                 Seat::Host->value => $game->winsFor(Seat::Host),
                 Seat::Guest->value => $game->winsFor(Seat::Guest),
             ],
+            'game_results' => $game->game_results,
+            'winner_seat' => $game->winner_seat,
             'seats' => [
                 Seat::Host->value => [
                     'name' => $game->nameFor(Seat::Host),
@@ -202,8 +206,9 @@ class GameController extends Controller
             // they next move. Already stripped of everything hidden by the
             // browser that saved it; this only passes it on. Withheld until the
             // match is live, on the same rule the relay follows: a board played
-            // alone is nobody else's business.
-            'opponent_state' => $seat && $game->matchIsLive()
+            // alone is nobody else's business. A finished match keeps it, as the
+            // final position.
+            'opponent_state' => $seat && ($game->matchIsLive() || $game->status === GameStatus::Finished)
                 ? $game->publicStateFor($seat->opposing())
                 : null,
         ];

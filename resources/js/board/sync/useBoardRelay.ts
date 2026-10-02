@@ -23,12 +23,15 @@ export const STALE_RETRY_MS = 5000;
  */
 export function useBoardRelay({
   code,
+  matchNumber,
   gameNumber,
   relaying,
   saving,
   onStale,
 }: {
   code: string;
+  /** The match in progress. A rematch starts the game number over. */
+  matchNumber?: number;
   /** The game in progress, which a board belongs to. */
   gameNumber: number;
   /** Off until the match is live. A board played alone is nobody else's business. */
@@ -83,13 +86,14 @@ export function useBoardRelay({
       seq.current += 1;
 
       postJson(`/games/${code}/sync`, {
+        match_number: matchNumber,
         game_number: game,
         session: session.current,
         seq: seq.current,
         state: publicState,
       }).catch((error) => failed('relay', game, error));
     },
-    [code, failed]
+    [code, matchNumber, failed]
   );
 
   const save = useCallback(() => {
@@ -98,12 +102,13 @@ export function useBoardRelay({
 
     // A save still pending when the game moves on is refused, not written over the next one.
     postJson(`/games/${code}/state`, {
+      match_number: matchNumber,
       game_number: current.gameNumber,
       seq: seq.current,
       state: compactState(current.state),
       public_state: current.publicState,
     }).catch((error) => failed('save', current.gameNumber, error));
-  }, [code, failed]);
+  }, [code, matchNumber, failed]);
 
   const publish = useCallback(
     (state: GameState) => {

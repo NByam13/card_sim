@@ -1,12 +1,17 @@
 import { accept, destroy } from '@/actions/App/Http/Controllers/GameController';
 import BoardArena from '@/board/components/BoardArena';
 import ConcedeModal from '@/board/components/ConcedeModal';
+import MatchResultModal, {
+  FinishedMatch,
+  MatchOverBar,
+  MatchSummary,
+} from '@/board/components/MatchResult';
 import MatchFormatToggle from '@/components/MatchFormatToggle';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
 import SeamBar from '@/board/components/SeamBar';
 import TurnOrderModal from '@/board/components/TurnOrderModal';
-import WinClaimModal, { MatchScore } from '@/board/components/WinClaimModal';
+import WinClaimModal from '@/board/components/WinClaimModal';
 import { contactLane } from '@/board/mlp/turnTrack';
 import { CompactGameState, expandState } from '@/board/sync/persist';
 import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
@@ -34,10 +39,12 @@ interface SeatState {
   claimed: boolean;
 }
 
-interface Game extends MatchScore {
+interface Game extends FinishedMatch {
   code: string;
   setup: string;
   status: GameStatus;
+  /** Counts the matches played on this game. A rematch moves it on and starts from game 1. */
+  match_number: number;
   seats: Record<Seat, SeatState>;
   you: Seat | null;
   /** Which seats are ready to play each other. Both means the match is live. */
@@ -106,7 +113,10 @@ export default function Show({
 
   if (!cancelled && seat && game.deck && (seated || solo)) {
     return (
+      // Keyed by match, so a rematch starts every hook over from the new match's
+      // props: they order what they hold by game number, which a rematch resets.
       <Playing
+        key={game.match_number}
         game={game}
         seat={seat}
         cursor={cursor}
@@ -133,7 +143,9 @@ export default function Show({
               <h1 className="text-2xl font-semibold">
                 {game.status === GameStatus.Waiting
                   ? 'Waiting for a second player'
-                  : 'Both players seated'}
+                  : game.status === GameStatus.Finished
+                    ? 'Match over'
+                    : 'Both players seated'}
               </h1>
               <p className="text-sm text-gray-600">
                 {seat ? `You are the ${seat}.` : 'You are watching this game.'}
@@ -153,6 +165,8 @@ export default function Show({
               onCancelled={onCancelled}
               onFormatChanged={setFormat}
             />
+
+            {game.status === GameStatus.Finished && <FinishedLobby game={game} seat={seat} />}
 
             <MatchFormatToggle code={game.code} format={format} editable={canChangeFormat} />
 
@@ -235,6 +249,11 @@ function Playing({
   useEffect(() => setAccepted(game.accepted), [game.accepted]);
 
   const matchLive = accepted.host && accepted.guest;
+  // Over, with the final position left on the table. Its acceptances were cleared
+  // with it, so what they say now is who has asked for a rematch.
+  const finished = game.status === GameStatus.Finished;
+  const inMatch = matchLive || finished;
+  const [resultsOpen, setResultsOpen] = useState(true);
   // The other seat turning up while this board was on screen, as opposed to
   // already being there when the page loaded. Only the first is worth a modal.
   const [seatedOnMount] = useState(seated);
@@ -242,14 +261,19 @@ function Playing({
 
   const { publish, announce } = useBoardRelay({
     code: game.code,
+    matchNumber: game.match_number,
     gameNumber: game.game_number,
     onStale: reloadIntoCurrentGame,
     relaying: matchLive,
     saving: game.status === GameStatus.Active,
   });
   const { mirror, receive } = useMirror(lookupCard, game.opponent_state, game.game_number);
-  const turn = useTurnCursor({ code: game.code, seat, cursor });
-  const order = useTurnOrder({ code: game.code, turnOrder: servedTurnOrder });
+  const turn = useTurnCursor({ code: game.code, matchNumber: game.match_number, seat, cursor });
+  const order = useTurnOrder({
+    code: game.code,
+    matchNumber: game.match_number,
+    turnOrder: servedTurnOrder,
+  });
   // The hooks take a reload into the next game an effect after the page does, so
   // for that render they still hold the last game's. The board is only handed
   // turn order and the cursor once they belong to the game it is dealt for.
@@ -280,9 +304,10 @@ function Playing({
       // The match going live discarded both solo boards on the server, and the
       // props this page still holds are the boards it discarded — including the
       // opponent's, which would otherwise seed the mirror with the game they
-      // were playing by themselves.
+      // were playing by themselves. A rematch going live also moved the row on
+      // to a new match, with its own turn order and cursor.
       if (next.host && next.guest) {
-        router.reload({ only: ['game'] });
+        reloadIntoCurrentGame();
       }
     }, []),
   });
@@ -298,7 +323,7 @@ function Playing({
   // they waited does not become the hand they play. So does each next game of a
   // Bo3. The key remounts the arena; dropping the restore is what stops it
   // dealing the discarded board again.
-  const arenaKey = matchLive ? `match:${game.game_number}` : 'solo';
+  const arenaKey = inMatch ? `match:${game.game_number}` : 'solo';
   const [arenaKeyOnMount] = useState(arenaKey);
   const savedState = arenaKey === arenaKeyOnMount ? restored : null;
 
@@ -308,12 +333,14 @@ function Playing({
     game.wins.host + game.wins.guest < game.game_number;
   const winClaim = useWinClaim({
     code: game.code,
+    matchNumber: game.match_number,
     gameNumber: game.game_number,
     restoring: savedState,
     enabled: gameUndecided && firstPlayer !== null,
   });
   const concession = useConcede({
     code: game.code,
+    matchNumber: game.match_number,
     gameNumber: game.game_number,
     enabled: gameUndecided,
   });
@@ -330,7 +357,8 @@ function Playing({
 
   const opponentName = seatNames(game)[opponent];
   // A full visit rather than a bare POST: the board deals fresh from props that
-  // no longer carry a saved state, which is what accepting means.
+  // no longer carry a saved state, which is what accepting means. A rematch is
+  // the same answer, given once the match is over.
   const acceptMatch = useCallback(() => router.post(accept.url(game.code)), [game.code]);
 
   return (
@@ -376,9 +404,9 @@ function Playing({
           // Re-dealing your own opening in front of an opponent who does not
           // re-deal theirs is a way around the mulligan rules, so it is a solo
           // affordance only.
-          canRestart={!matchLive}
+          canRestart={!inMatch}
           turnCursor={matchLive ? { ...turn, cursor: currentCursor } : undefined}
-          goingFirst={matchLive ? (firstPlayer ? firstPlayer === seat : null) : undefined}
+          goingFirst={inMatch ? (firstPlayer ? firstPlayer === seat : null) : undefined}
           opponentStarted={mirror?.started ?? false}
           rings={matchLive ? { acting: acting === seat, contactLane: lane } : undefined}
           seam={
@@ -398,12 +426,24 @@ function Playing({
                     />
                   </div>
                 )
-              : undefined
+              : finished
+                ? () => (
+                    <div className="mb-3">
+                      <MatchOverBar
+                        seat={seat}
+                        names={seatNames(game)}
+                        match={game}
+                        accepted={accepted}
+                        onResults={() => setResultsOpen(true)}
+                      />
+                    </div>
+                  )
+                : undefined
           }
           header={
             seated ? (
               <div className="mb-3">
-                {matchLive ? (
+                {inMatch ? (
                   <MirrorBoard
                     state={mirror}
                     scale={mirrorScale}
@@ -412,7 +452,9 @@ function Playing({
                     name={opponentName}
                     present={opponentPresent !== false}
                     goingFirst={firstPlayer ? firstPlayer !== seat : null}
-                    rings={{ acting: acting === opponent, contactLane: lane }}
+                    rings={
+                      matchLive ? { acting: acting === opponent, contactLane: lane } : undefined
+                    }
                   />
                 ) : (
                   <MatchPending
@@ -443,6 +485,17 @@ function Playing({
         />
       )}
 
+      {finished && resultsOpen && (
+        <MatchResultModal
+          seat={seat}
+          names={seatNames(game)}
+          match={game}
+          accepted={accepted}
+          onRematch={acceptMatch}
+          onClose={() => setResultsOpen(false)}
+        />
+      )}
+
       {winClaim.prompting && (
         <WinClaimModal
           seat={seat}
@@ -469,7 +522,7 @@ function Playing({
 
       {/* Asked only of a seat the news reaches mid-game. Anyone who loads the
           page into this state gets the standing invitation above instead. */}
-      {seated && !accepted[seat] && !seatedOnMount && !declined && (
+      {seated && !finished && !accepted[seat] && !seatedOnMount && !declined && (
         <MatchInviteModal
           name={opponentName}
           onAccept={acceptMatch}
@@ -581,6 +634,26 @@ function MatchInviteModal({
 }
 
 /**
+ * The result, for anyone on the lobby once the match is over: a watcher, who
+ * has no board to see it on.
+ */
+function FinishedLobby({ game, seat }: { game: Game; seat: Seat | null }) {
+  const names = seatNames(game);
+  const asking = [Seat.Host, Seat.Guest].filter((which) => game.accepted[which]);
+
+  return (
+    <section className="space-y-3 rounded border border-gray-200 p-4">
+      <MatchSummary seat={seat} names={names} match={game} />
+      {asking.length > 0 && (
+        <p className="text-center text-xs text-gray-500">
+          {asking.map((which) => names[which]).join(' and ')} asked for a rematch.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/**
  * What is left when the host cancels: the row is gone, so there is nothing to
  * show and nothing to reload — only somewhere else to go.
  */
@@ -649,6 +722,9 @@ function Table({
       .listen('.match.format_changed', ({ format }: { format: MatchFormat }) =>
         onFormatChanged(format)
       )
+      // A watcher's only view of the result, and of a rematch starting over it.
+      .listen('.game.finished', () => router.reload({ only: ['game'] }))
+      .listen('.match.accepted', () => router.reload({ only: ['game'] }))
       .error((error: unknown) => console.error('game channel subscription failed', error));
   }, [channel, onCancelled, onFormatChanged]);
 
