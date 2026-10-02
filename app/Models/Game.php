@@ -594,7 +594,8 @@ class Game extends Model
      * Move the cursor on the acting seat's behalf. Before the first turn this
      * opens turn 1 for the first player; after it, ending the turn hands the
      * next one to the other seat with no stop yet. Returns false when the turn
-     * changed hands, or a result was recorded, since this model was read.
+     * changed hands, a result was recorded, or the match moved on to another
+     * game since this model was read.
      *
      * @throws LogicException before turn order is decided
      */
@@ -608,12 +609,14 @@ class Game extends Model
             default => ['turn_stop' => $turnStop],
         };
 
+        $gameNumber = $this->getRawOriginal('game_number');
         $turnNumber = $this->getRawOriginal('turn_number');
         $activeSeat = $this->getRawOriginal('active_seat');
         $recorded = count($this->game_results);
 
         return $this->fillWhere($cursor, fn (Builder $query) => $query
             ->where('status', GameStatus::Active)
+            ->where('game_number', $gameNumber)
             ->whereJsonLength('game_results', $recorded)
             ->where('turn_number', $turnNumber)
             ->where('active_seat', $activeSeat));

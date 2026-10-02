@@ -11,6 +11,8 @@ import { contactLane } from '@/board/mlp/turnTrack';
 import { CompactGameState, expandState } from '@/board/sync/persist';
 import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
 import { useBoardRelay } from '@/board/sync/useBoardRelay';
+import { cursorFor, turnOrderFor } from '@/board/sync/currentGame';
+import { reloadIntoCurrentGame } from '@/board/sync/reload';
 import { useConcede } from '@/board/sync/useConcede';
 import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
 import { useMirror } from '@/board/sync/useMirror';
@@ -248,7 +250,12 @@ function Playing({
   const { mirror, receive } = useMirror(lookupCard, game.opponent_state, game.game_number);
   const turn = useTurnCursor({ code: game.code, seat, cursor });
   const order = useTurnOrder({ code: game.code, turnOrder: servedTurnOrder });
-  const firstPlayer = order.turnOrder.first_player;
+  // The hooks take a reload into the next game an effect after the page does, so
+  // for that render they still hold the last game's. The board is only handed
+  // turn order and the cursor once they belong to the game it is dealt for.
+  const currentOrder = turnOrderFor(game.game_number, order.turnOrder);
+  const currentCursor = cursorFor(game.game_number, turn.cursor);
+  const firstPlayer = currentOrder.first_player;
   // Outlives the decision by the modal's hold, so the result is seen before it goes.
   const [decidingTurnOrder, setDecidingTurnOrder] = useState(firstPlayer === null);
   useEffect(() => {
@@ -301,10 +308,15 @@ function Playing({
     game.wins.host + game.wins.guest < game.game_number;
   const winClaim = useWinClaim({
     code: game.code,
+    gameNumber: game.game_number,
     restoring: savedState,
     enabled: gameUndecided && firstPlayer !== null,
   });
-  const concession = useConcede({ code: game.code, enabled: gameUndecided });
+  const concession = useConcede({
+    code: game.code,
+    gameNumber: game.game_number,
+    enabled: gameUndecided,
+  });
   const onBoardState = useCallback(
     (state: GameState) => {
       publish(state);
@@ -313,8 +325,8 @@ function Playing({
     [publish, winClaim.watch]
   );
 
-  const acting = turn.cursor.active_seat ?? firstPlayer;
-  const lane = contactLane(turn.cursor.turn_stop);
+  const acting = currentCursor.active_seat ?? firstPlayer;
+  const lane = contactLane(currentCursor.turn_stop);
 
   const opponentName = seatNames(game)[opponent];
   // A full visit rather than a bare POST: the board deals fresh from props that
@@ -365,7 +377,7 @@ function Playing({
           // re-deal theirs is a way around the mulligan rules, so it is a solo
           // affordance only.
           canRestart={!matchLive}
-          turnCursor={matchLive ? turn : undefined}
+          turnCursor={matchLive ? { ...turn, cursor: currentCursor } : undefined}
           goingFirst={matchLive ? (firstPlayer ? firstPlayer === seat : null) : undefined}
           opponentStarted={mirror?.started ?? false}
           rings={matchLive ? { acting: acting === seat, contactLane: lane } : undefined}
@@ -376,8 +388,8 @@ function Playing({
                     <SeamBar
                       seat={seat}
                       names={seatNames(game)}
-                      cursor={turn.cursor}
-                      turnOrder={order.turnOrder}
+                      cursor={currentCursor}
+                      turnOrder={currentOrder}
                       onAdvance={onAdvance}
                       waiting={waiting}
                       away={opponentPresent === false ? [opponent] : []}
@@ -422,7 +434,7 @@ function Playing({
         <TurnOrderModal
           seat={seat}
           names={seatNames(game)}
-          gameNumber={game.game_number}
+          gameNumber={order.turnOrder.game_number}
           turnOrder={order.turnOrder}
           opponentPresent={opponentPresent !== false}
           onRoll={order.roll}
@@ -467,9 +479,6 @@ function Playing({
     </>
   );
 }
-
-/** In a Bo3 the match may have moved on to the next game, with turn order to decide again. */
-const reloadIntoCurrentGame = () => router.reload({ only: ['game', 'cursor', 'turnOrder'] });
 
 function seatNames(game: Game): Record<Seat, string> {
   return {

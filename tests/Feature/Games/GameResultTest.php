@@ -41,7 +41,7 @@ class GameResultTest extends TestCase
     {
         $game = $this->bo3()->create();
 
-        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win")->assertOk();
+        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertOk();
 
         $game->refresh();
         $this->assertSame(GameStatus::Active, $game->status);
@@ -55,7 +55,7 @@ class GameResultTest extends TestCase
     {
         $game = $this->bo3()->gamesWonBy(Seat::Host)->create();
 
-        $this->as(Seat::Guest, $game)->postJson("/games/{$game->code}/concede")->assertOk();
+        $this->as(Seat::Guest, $game)->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertOk();
 
         $game->refresh();
         $this->assertSame(GameStatus::Finished, $game->status);
@@ -68,7 +68,7 @@ class GameResultTest extends TestCase
     {
         $game = $this->bo3()->create();
 
-        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win")->assertOk();
+        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertOk();
 
         $channel = new GameChannel;
         $this->assertSame('host', $channel->join(new Participant('v:host', [$game->code => 'host-token']), $game)['role']);

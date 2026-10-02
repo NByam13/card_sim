@@ -10,7 +10,8 @@ use Illuminate\Contracts\Broadcasting\ShouldRescue;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * The roll winner chose who goes first.
+ * The chooser decided who goes first: the roll winner in game 1, the last
+ * game's loser after it.
  */
 class TurnOrderDecided implements ShouldBroadcastNow, ShouldRescue
 {

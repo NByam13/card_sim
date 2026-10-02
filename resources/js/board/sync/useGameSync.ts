@@ -188,11 +188,6 @@ export async function postJson<T = unknown>(url: string, data: unknown): Promise
   return (response.data.trim() === '' ? undefined : JSON.parse(response.data)) as T;
 }
 
-/** Whether a `postJson` failure was the server answering 409. */
-export function isConflict(error: unknown): boolean {
-  return (error as { response?: { status?: number } } | null)?.response?.status === 409;
-}
-
 /** Resolve a card through this app's cached proxy. Null when it cannot be. */
 export async function lookupCard(cardNumber: string): Promise<Card | null> {
   try {

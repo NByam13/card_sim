@@ -3,10 +3,14 @@ import { GameState } from '../types';
 import { compactState } from './persist';
 import { redact } from './redact';
 import { PublicState } from './types';
-import { isConflict, postJson } from './useGameSync';
+import { isStaleGame } from './reload';
+import { postJson } from './useGameSync';
 
 /** How long the board must sit still before it is saved. */
 const SAVE_DEBOUNCE_MS = 1500;
+
+/** How long before a game still refused as stale is reported again, in case the reload failed. */
+export const STALE_RETRY_MS = 5000;
 
 /**
  * This seat's board leaving the browser: relayed on every change, saved once it
@@ -59,14 +63,18 @@ export function useBoardRelay({
   gameNumberRef.current = gameNumber;
   const onStaleRef = useRef(onStale);
   onStaleRef.current = onStale;
-  // Once per game, however many boards were in flight when it ended.
-  const staleReported = useRef<number | null>(null);
+  // Once per game however many boards were in flight when it ended, and again
+  // only if the page is still on that game a while later.
+  const staleReported = useRef<{ game: number; at: number } | null>(null);
 
   const failed = useCallback((what: string, game: number, error: unknown) => {
     console.error(`failed to ${what} the board`, error);
-    if (!isConflict(error) || staleReported.current === game) return;
+    if (!isStaleGame(error)) return;
 
-    staleReported.current = game;
+    const last = staleReported.current;
+    if (last?.game === game && Date.now() - last.at < STALE_RETRY_MS) return;
+
+    staleReported.current = { game, at: Date.now() };
     onStaleRef.current();
   }, []);
 

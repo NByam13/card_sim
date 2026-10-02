@@ -10,7 +10,7 @@ use Illuminate\Auth\Access\Response;
  * A seat claiming the game in progress. The board is not checked: the server
  * cannot see it, so the claim is taken on trust.
  */
-class ClaimWinRequest extends ActiveSeatRequest
+class ClaimWinRequest extends GameScopedRequest
 {
     protected string $notActive = 'This match is not in play.';
 

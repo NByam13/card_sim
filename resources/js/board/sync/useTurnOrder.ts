@@ -6,6 +6,7 @@ import { router } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Seat } from '@/types/game';
 import { TurnOrder, TurnOrderRoll } from './types';
+import { reloadIntoCurrentGame } from './reload';
 import { postJson } from './useGameSync';
 
 const sameDice = (a: number[], b: number[]) =>
@@ -85,7 +86,7 @@ export function useTurnOrder({ code, turnOrder: served }: { code: string; turnOr
       if (gameNumber > held.game_number) {
         // Decided for a game this page has not reloaded into yet.
         apply({ game_number: gameNumber, roll: null, first_player: firstPlayer, chooser: null });
-        router.reload({ only: ['turnOrder', 'cursor'] });
+        reloadIntoCurrentGame();
         return;
       }
 
@@ -103,7 +104,7 @@ export function useTurnOrder({ code, turnOrder: served }: { code: string; turnOr
       .then(onDone)
       .catch((error) => {
         console.error('failed to settle turn order', error);
-        router.reload({ only: ['turnOrder', 'cursor'] });
+        reloadIntoCurrentGame();
       })
       .finally(() => {
         inFlight.current = false;
@@ -122,7 +123,7 @@ export function useTurnOrder({ code, turnOrder: served }: { code: string; turnOr
     (firstPlayer: Seat) =>
       send<{ first_player: Seat; game_number: number }>(
         electRoute.url(code),
-        { first_player: firstPlayer },
+        { first_player: firstPlayer, game_number: latest.current.game_number },
         (response) => receiveDecided(response.first_player, response.game_number)
       ),
     [code, send, receiveDecided]

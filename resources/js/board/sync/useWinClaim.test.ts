@@ -33,7 +33,7 @@ function board(zone: ZoneId, started = true): GameState {
 }
 
 const mount = (restoring: GameState | null = null, enabled = true) =>
-  renderHook(({ enabled }) => useWinClaim({ code: 'abc123', restoring, enabled }), {
+  renderHook(({ enabled }) => useWinClaim({ code: 'abc123', gameNumber: 2, restoring, enabled }), {
     initialProps: { enabled },
   });
 
@@ -140,10 +140,10 @@ describe('useWinClaim', () => {
 
     await act(async () => result.current.claim());
 
-    expect(posted).toHaveBeenCalledWith('/games/abc123/claim-win', {});
+    expect(posted).toHaveBeenCalledWith('/games/abc123/claim-win', { game_number: 2 });
     expect(result.current.prompting).toBe(false);
     expect(result.current.busy).toBe(false);
-    expect(router.reload).toHaveBeenCalledWith({ only: ['game'] });
+    expect(router.reload).toHaveBeenCalledWith({ only: ['game', 'cursor', 'turnOrder'] });
   });
 
   it('keeps the prompt open with an error when the claim is refused', async () => {
@@ -156,6 +156,6 @@ describe('useWinClaim', () => {
 
     expect(result.current.prompting).toBe(true);
     expect(result.current.error).toMatch(/could not be recorded/);
-    expect(router.reload).toHaveBeenCalledWith({ only: ['game'] });
+    expect(router.reload).toHaveBeenCalledWith({ only: ['game', 'cursor', 'turnOrder'] });
   });
 });

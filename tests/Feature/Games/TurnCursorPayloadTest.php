@@ -127,7 +127,7 @@ class TurnCursorPayloadTest extends TestCase
         $game = $this->midTurn();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/cursor", ['turn_stop' => 'end'])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'turn_stop' => 'end'])
             ->assertOk();
 
         $this->as(Seat::Guest, $game)
@@ -137,7 +137,7 @@ class TurnCursorPayloadTest extends TestCase
             ]));
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/cursor", ['ends_turn' => true])
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => $game->game_number, 'ends_turn' => true])
             ->assertOk();
 
         $this->as(Seat::Guest, $game)

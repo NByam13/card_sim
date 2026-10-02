@@ -56,7 +56,7 @@ class NextGameTest extends TestCase
     {
         $game = $this->midGameOne()->create();
 
-        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win")->assertOk();
+        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertOk();
 
         $game->refresh();
         $this->assertSame(GameStatus::Active, $game->status);
@@ -71,7 +71,7 @@ class NextGameTest extends TestCase
         $this->assertSame(['game_number' => 2, 'roll' => null, 'first_player' => null, 'chooser' => 'guest'], $game->turnOrder());
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/turn-order/elect", ['first_player' => 'guest'])
+            ->postJson("/games/{$game->code}/turn-order/elect", ['game_number' => $game->game_number, 'first_player' => 'guest'])
             ->assertOk()
             ->assertExactJson(['first_player' => 'guest', 'game_number' => 2]);
 
@@ -91,7 +91,7 @@ class NextGameTest extends TestCase
         $game->recordGameResult(Seat::Host, WinReason::Story);
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/turn-order/elect", ['first_player' => 'host'])
+            ->postJson("/games/{$game->code}/turn-order/elect", ['game_number' => $game->game_number, 'first_player' => 'host'])
             ->assertForbidden()
             ->assertJson(['message' => 'Only the loser of the last game chooses who goes first.']);
 
@@ -117,7 +117,7 @@ class NextGameTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->bo3()
             ->gamesWonBy(Seat::Guest)->turnOrderDecided(Seat::Host)->create();
 
-        $this->as(Seat::Guest, $game)->postJson("/games/{$game->code}/concede")->assertOk();
+        $this->as(Seat::Guest, $game)->postJson("/games/{$game->code}/concede", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertOk();
 
         $game->refresh();
         $this->assertSame(3, $game->game_number);
@@ -128,7 +128,7 @@ class NextGameTest extends TestCase
     {
         $game = $this->midGameOne()->gamesWonBy(Seat::Host)->create();
 
-        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win")->assertOk();
+        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertOk();
 
         $game->refresh();
         $this->assertSame(GameStatus::Finished, $game->status);
@@ -148,5 +148,45 @@ class NextGameTest extends TestCase
         $this->assertFalse($stale->electFirstPlayer(Seat::Host));
 
         $this->assertNull($game->fresh()->first_player);
+    }
+
+    /** The loser often concedes just as the winner claims; the second of the two must not decide game 2. */
+    public function test_a_concede_for_a_game_already_won_does_not_decide_the_next(): void
+    {
+        $game = $this->midGameOne()->create();
+
+        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win", ['game_number' => 1])->assertOk();
+        $this->as(Seat::Guest, $game)
+            ->postJson("/games/{$game->code}/concede", ['game_number' => 1])
+            ->assertConflict()
+            ->assertJson(['message' => 'That was for an earlier game.']);
+
+        $game->refresh();
+        $this->assertSame(GameStatus::Active, $game->status);
+        $this->assertCount(1, $game->game_results);
+    }
+
+    public function test_a_cursor_move_from_an_earlier_game_is_refused(): void
+    {
+        $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->bo3()
+            ->gamesWonBy(Seat::Guest)->turnOrderDecided(Seat::Host)->create();
+
+        $this->as(Seat::Host, $game)
+            ->postJson("/games/{$game->code}/cursor", ['game_number' => 1, 'turn_stop' => 'main'])
+            ->assertConflict();
+
+        $this->assertSame(0, $game->refresh()->turn_number);
+    }
+
+    public function test_an_election_from_an_earlier_game_is_refused_as_stale(): void
+    {
+        $game = $this->midGameOne()->create();
+        $game->recordGameResult(Seat::Host, WinReason::Story);
+
+        $this->as(Seat::Guest, $game)
+            ->postJson("/games/{$game->code}/turn-order/elect", ['game_number' => 1, 'first_player' => 'guest'])
+            ->assertConflict();
+
+        $this->assertNull($game->refresh()->first_player);
     }
 }

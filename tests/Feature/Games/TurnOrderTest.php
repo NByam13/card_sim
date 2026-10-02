@@ -90,7 +90,7 @@ class TurnOrderTest extends TestCase
         $game = $this->rolledGame(Seat::Host);
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/turn-order/elect", ['first_player' => 'guest'])
+            ->postJson("/games/{$game->code}/turn-order/elect", ['game_number' => $game->game_number, 'first_player' => 'guest'])
             ->assertOk()
             ->assertExactJson(['first_player' => 'guest', 'game_number' => 1]);
 
@@ -104,7 +104,7 @@ class TurnOrderTest extends TestCase
         $game = $this->rolledGame(Seat::Host);
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/turn-order/elect", ['first_player' => 'guest'])
+            ->postJson("/games/{$game->code}/turn-order/elect", ['game_number' => $game->game_number, 'first_player' => 'guest'])
             ->assertForbidden();
 
         $this->assertNull($game->refresh()->first_player);
@@ -116,7 +116,7 @@ class TurnOrderTest extends TestCase
         $game = $this->activeGame();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/turn-order/elect", ['first_player' => 'host'])
+            ->postJson("/games/{$game->code}/turn-order/elect", ['game_number' => $game->game_number, 'first_player' => 'host'])
             ->assertForbidden();
 
         $this->assertNull($game->refresh()->first_player);
@@ -125,11 +125,11 @@ class TurnOrderTest extends TestCase
     public function test_the_first_election_is_kept(): void
     {
         $game = $this->rolledGame(Seat::Guest);
-        $this->as(Seat::Guest, $game)->postJson("/games/{$game->code}/turn-order/elect", ['first_player' => 'guest'])->assertOk();
+        $this->as(Seat::Guest, $game)->postJson("/games/{$game->code}/turn-order/elect", ['game_number' => $game->game_number, 'first_player' => 'guest'])->assertOk();
 
         Event::fake([TurnOrderDecided::class]);
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/turn-order/elect", ['first_player' => 'host'])
+            ->postJson("/games/{$game->code}/turn-order/elect", ['game_number' => $game->game_number, 'first_player' => 'host'])
             ->assertForbidden();
 
         $this->assertSame(Seat::Guest, $game->refresh()->first_player);
@@ -141,7 +141,7 @@ class TurnOrderTest extends TestCase
         $game = $this->rolledGame(Seat::Host);
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/turn-order/elect", ['first_player' => 'spectator'])
+            ->postJson("/games/{$game->code}/turn-order/elect", ['game_number' => $game->game_number, 'first_player' => 'spectator'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('first_player');
     }

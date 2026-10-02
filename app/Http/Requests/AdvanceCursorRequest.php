@@ -11,7 +11,7 @@ use Illuminate\Validation\Rule;
  * Moving the shared turn cursor: only the acting seat may. `turn_stop` is
  * required for a move and prohibited when the turn is ending.
  */
-class AdvanceCursorRequest extends ActiveSeatRequest
+class AdvanceCursorRequest extends GameScopedRequest
 {
     protected function authorizeSeat(Seat $seat, Game $game): Response
     {
@@ -27,7 +27,7 @@ class AdvanceCursorRequest extends ActiveSeatRequest
     }
 
     /** @return array<string, mixed> */
-    public function rules(): array
+    protected function gameRules(): array
     {
         return [
             'turn_stop' => [

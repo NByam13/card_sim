@@ -9,7 +9,7 @@ use Illuminate\Auth\Access\Response;
 /**
  * A seat giving the game in progress to its opponent.
  */
-class ConcedeRequest extends ActiveSeatRequest
+class ConcedeRequest extends GameScopedRequest
 {
     protected string $notActive = 'This match is not in play.';
 

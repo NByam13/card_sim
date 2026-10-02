@@ -11,7 +11,7 @@ use Illuminate\Validation\Rule;
  * The seat entitled to it choosing which seat goes first: the roll winner in
  * game 1, the loser of the last game after it.
  */
-class ElectFirstPlayerRequest extends ActiveSeatRequest
+class ElectFirstPlayerRequest extends GameScopedRequest
 {
     protected function authorizeSeat(Seat $seat, Game $game): Response
     {
@@ -31,7 +31,7 @@ class ElectFirstPlayerRequest extends ActiveSeatRequest
     }
 
     /** @return array<string, mixed> */
-    public function rules(): array
+    protected function gameRules(): array
     {
         return [
             'first_player' => ['required', Rule::enum(Seat::class)],

@@ -57,7 +57,10 @@ describe('useTurnCursor', () => {
       turn_stop: 'contact:1',
     });
 
-    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', { turn_stop: 'contact:1' });
+    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', {
+      turn_stop: 'contact:1',
+      game_number: 1,
+    });
     expect(result.current.cursor).toEqual(served({ turn_stop: 'contact:1' }));
   });
 
@@ -123,7 +126,10 @@ describe('useTurnCursor', () => {
       turn_stop: null,
     });
 
-    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', { ends_turn: true });
+    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', {
+      ends_turn: true,
+      game_number: 1,
+    });
     expect(onTurnStart).not.toHaveBeenCalled();
     expect(result.current.cursor.my_turn).toBe(false);
   });
@@ -149,7 +155,10 @@ describe('useTurnCursor', () => {
       turn_stop: 'contact:1',
     });
 
-    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', { turn_stop: 'contact:1' });
+    expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', {
+      turn_stop: 'contact:1',
+      game_number: 1,
+    });
   });
 
   it('reloads the cursor when a move is refused, and takes presses again', async () => {
@@ -418,6 +427,36 @@ describe('useTurnCursor', () => {
       });
 
       expect(onTurnStart).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('stale games', () => {
+    it('sends the game its cursor is for', async () => {
+      const { result } = mount(served({ game_number: 2, turn_stop: 'main' }));
+      const response = pending();
+
+      act(() => result.current.advance(vi.fn()));
+      await response.settle({
+        game_number: 2,
+        turn_number: 3,
+        active_seat: 'host',
+        turn_stop: 'contact:1',
+      });
+
+      expect(posted).toHaveBeenCalledWith('/games/abc123/cursor', {
+        turn_stop: 'contact:1',
+        game_number: 2,
+      });
+    });
+
+    it('reloads into the current game when a move is refused for an earlier one', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      posted.mockRejectedValueOnce(Object.assign(new Error('409'), { response: { status: 409 } }));
+      const { result } = mount(served({ turn_stop: 'main' }));
+
+      await act(async () => result.current.advance(vi.fn()));
+
+      expect(router.reload).toHaveBeenCalledWith({ only: ['game', 'cursor', 'turnOrder'] });
     });
   });
 });

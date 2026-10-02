@@ -2,13 +2,10 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyZones } from '../setup';
 import { CardInstance, GameState } from '../types';
-import { useBoardRelay } from './useBoardRelay';
+import { STALE_RETRY_MS, useBoardRelay } from './useBoardRelay';
 
 // The transport is the edge; everything above it is what these tests are about.
-vi.mock('./useGameSync', async (importOriginal) => ({
-  isConflict: (await importOriginal<typeof import('./useGameSync')>()).isConflict,
-  postJson: vi.fn(() => Promise.resolve()),
-}));
+vi.mock('./useGameSync', () => ({ postJson: vi.fn(() => Promise.resolve()) }));
 
 const { postJson } = await import('./useGameSync');
 const posted = vi.mocked(postJson);
@@ -260,6 +257,18 @@ describe('useBoardRelay', () => {
       await act(async () => vi.advanceTimersByTime(1500));
 
       expect(onStale).toHaveBeenCalledOnce();
+    });
+
+    it('reports the game again if the page is still on it a while later', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      posted.mockRejectedValue(refused(409));
+      const { result } = relay();
+
+      await act(async () => result.current.publish(boardWith()));
+      await act(async () => vi.advanceTimersByTime(STALE_RETRY_MS));
+      await act(async () => result.current.publish(boardWith()));
+
+      expect(onStale).toHaveBeenCalledTimes(2);
     });
 
     it('does not mistake any other failure for a stale board', async () => {

@@ -30,7 +30,10 @@ class TurnOrderController extends Controller
     /** The roll winner, or the last game's loser, chooses which seat goes first. */
     public function elect(Game $game, ElectFirstPlayerRequest $request): JsonResponse
     {
-        abort_if(! $game->electFirstPlayer($request->firstPlayer()), 403, 'Turn order is already decided.');
+        if (! $game->electFirstPlayer($request->firstPlayer())) {
+            abort_if($game->fresh()?->game_number !== $request->gameNumber(), 409, 'That was for an earlier game.');
+            abort(403, 'Turn order is already decided.');
+        }
 
         TurnOrderDecided::dispatch($game, $game->first_player);
 

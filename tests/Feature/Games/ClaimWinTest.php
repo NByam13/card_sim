@@ -33,7 +33,7 @@ class ClaimWinTest extends TestCase
         $game = $this->live();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/claim-win")
+            ->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertOk()
             ->assertExactJson([
                 'status' => 'finished',
@@ -51,7 +51,7 @@ class ClaimWinTest extends TestCase
         Event::fake([GameFinished::class]);
         $game = $this->live();
 
-        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win")->assertOk();
+        $this->as(Seat::Host, $game)->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertOk();
 
         Event::assertDispatched(GameFinished::class, fn (GameFinished $event) => $event->broadcastWith() === [
             'status' => 'finished',
@@ -65,7 +65,7 @@ class ClaimWinTest extends TestCase
         $game = $this->live();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/claim-win")
+            ->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertOk()
             ->assertJsonPath('winner_seat', 'guest');
 
@@ -80,7 +80,7 @@ class ClaimWinTest extends TestCase
         $game = $this->live();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/claim-win", ['seat' => 'host', 'winner' => 'host'])
+            ->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'seat' => 'host', 'winner' => 'host'])
             ->assertOk();
 
         $this->assertSame(Seat::Guest, $game->refresh()->winner_seat);
@@ -91,7 +91,7 @@ class ClaimWinTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->bo3()->turnOrderDecided()->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/claim-win")
+            ->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertOk()
             ->assertJsonPath('status', 'active')
             ->assertJsonPath('winner_seat', null);
@@ -104,7 +104,7 @@ class ClaimWinTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->turnOrderDecided()->gamesWonBy(Seat::Guest)->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/claim-win")
+            ->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertForbidden()
             ->assertJson(['message' => 'This match is not in play.']);
 
@@ -121,7 +121,7 @@ class ClaimWinTest extends TestCase
             ->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/claim-win")
+            ->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertConflict();
 
         $this->assertCount(1, $game->refresh()->game_results);
@@ -131,7 +131,7 @@ class ClaimWinTest extends TestCase
     {
         $game = $this->live();
 
-        $this->postJson("/games/{$game->code}/claim-win")->assertForbidden();
+        $this->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])->assertForbidden();
 
         $this->assertSame([], $game->refresh()->game_results);
     }
@@ -141,7 +141,7 @@ class ClaimWinTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->turnOrderDecided()->create();
 
         $this->as(Seat::Guest, $game)
-            ->postJson("/games/{$game->code}/claim-win")
+            ->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertForbidden();
 
         $this->assertSame([], $game->refresh()->game_results);
@@ -152,7 +152,7 @@ class ClaimWinTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->matchLive()->create();
 
         $this->as(Seat::Host, $game)
-            ->postJson("/games/{$game->code}/claim-win")
+            ->postJson("/games/{$game->code}/claim-win", ['game_number' => $game->game_number, 'game_number' => $game->game_number])
             ->assertForbidden();
     }
 

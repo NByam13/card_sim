@@ -1,10 +1,19 @@
 import { concede as concedeRoute } from '@/actions/App/Http/Controllers/GameResultController';
-import { router } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { reloadIntoCurrentGame } from './reload';
 import { postJson } from './useGameSync';
 
 /** Conceding the game in progress, behind one confirmation. */
-export function useConcede({ code, enabled }: { code: string; enabled: boolean }): {
+export function useConcede({
+  code,
+  gameNumber,
+  enabled,
+}: {
+  code: string;
+  /** The game being conceded. A concede for one already over is refused. */
+  gameNumber: number;
+  enabled: boolean;
+}): {
   confirming: boolean;
   open: () => void;
   dismiss: () => void;
@@ -34,7 +43,7 @@ export function useConcede({ code, enabled }: { code: string; enabled: boolean }
     setBusy(true);
     setError(null);
 
-    postJson(concedeRoute.url(code), {})
+    postJson(concedeRoute.url(code), { game_number: gameNumber })
       .then(() => setConfirming(false))
       .catch((failure) => {
         console.error('failed to concede', failure);
@@ -43,9 +52,9 @@ export function useConcede({ code, enabled }: { code: string; enabled: boolean }
       .finally(() => {
         inFlight.current = false;
         setBusy(false);
-        router.reload({ only: ['game'] });
+        reloadIntoCurrentGame();
       });
-  }, [code]);
+  }, [code, gameNumber]);
 
   return { confirming: enabled && confirming, open, dismiss, concede, busy, error };
 }

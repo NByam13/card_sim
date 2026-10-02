@@ -66,6 +66,7 @@ describe('useTurnOrder', () => {
 
     expect(posted).toHaveBeenCalledWith('/games/abc123/turn-order/elect', {
       first_player: 'guest',
+      game_number: 1,
     });
     expect(result.current.turnOrder.first_player).toBe('guest');
     expect(router.reload).toHaveBeenCalledOnce();
@@ -87,7 +88,7 @@ describe('useTurnOrder', () => {
 
     await act(async () => result.current.elect('host'));
 
-    expect(router.reload).toHaveBeenCalledWith({ only: ['turnOrder', 'cursor'] });
+    expect(router.reload).toHaveBeenCalledWith({ only: ['game', 'cursor', 'turnOrder'] });
   });
 
   describe('across games of a Bo3', () => {
@@ -110,7 +111,7 @@ describe('useTurnOrder', () => {
       act(() => result.current.receiveDecided('host', 2));
 
       expect(result.current.turnOrder).toMatchObject({ game_number: 2, first_player: 'host' });
-      expect(router.reload).toHaveBeenCalledWith({ only: ['turnOrder', 'cursor'] });
+      expect(router.reload).toHaveBeenCalledWith({ only: ['game', 'cursor', 'turnOrder'] });
     });
 
     it('keeps a decision when a reload answered before it lands afterwards', () => {

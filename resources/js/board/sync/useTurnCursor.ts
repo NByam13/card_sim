@@ -11,6 +11,7 @@ import {
 } from '../mlp/turnTrack';
 import { Seat } from '@/types/game';
 import { TurnCursor, WireCursor } from './types';
+import { isStaleGame, reloadIntoCurrentGame } from './reload';
 import { postJson } from './useGameSync';
 
 /** A press's turn start, for the turn it opens. */
@@ -123,7 +124,10 @@ export function useTurnCursor({
       inFlight.current = true;
       held.current = null;
 
-      postJson<{ cursor: WireCursor }>(advanceRoute.url(code), move)
+      postJson<{ cursor: WireCursor }>(advanceRoute.url(code), {
+        ...move,
+        game_number: latest.current.game_number,
+      })
         .then(({ cursor: moved }) => {
           receive(moved);
           if (turnStart) start(turnStart);
@@ -135,7 +139,11 @@ export function useTurnCursor({
             // The echo may have landed while the request was in flight.
             settleHeld(latest.current, false);
           }
-          router.reload({ only: ['cursor'] });
+          if (isStaleGame(error)) {
+            reloadIntoCurrentGame();
+          } else {
+            router.reload({ only: ['cursor'] });
+          }
         })
         .finally(() => {
           inFlight.current = false;
