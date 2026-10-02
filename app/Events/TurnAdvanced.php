@@ -28,7 +28,7 @@ class TurnAdvanced implements ShouldBroadcastNow, ShouldRescue
         return 'turn.advanced';
     }
 
-    /** @return array{cursor: array{turn_number: int, active_seat: string|null, turn_stop: string|null}} */
+    /** @return array{cursor: array{game_number: int, turn_number: int, active_seat: string|null, turn_stop: string|null}} */
     public function broadcastWith(): array
     {
         return ['cursor' => $this->game->cursor()];

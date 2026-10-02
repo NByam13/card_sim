@@ -32,9 +32,9 @@ class TurnOrderDecided implements ShouldBroadcastNow, ShouldRescue
         return 'turn_order.decided';
     }
 
-    /** @return array{first_player: string} */
+    /** @return array{first_player: string, game_number: int} */
     public function broadcastWith(): array
     {
-        return ['first_player' => $this->firstPlayer->value];
+        return ['first_player' => $this->firstPlayer->value, 'game_number' => $this->game->game_number];
     }
 }

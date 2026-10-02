@@ -11,6 +11,7 @@ class SaveBoardRequest extends ActiveSeatRequest
     public function rules(): array
     {
         return [
+            'game_number' => ['required', 'integer', 'min:1'],
             'seq' => ['required', 'integer', 'min:0'],
             'state' => ['required', 'array'],
             'public_state' => ['required', 'array'],

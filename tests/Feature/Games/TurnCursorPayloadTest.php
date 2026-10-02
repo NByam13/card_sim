@@ -36,7 +36,7 @@ class TurnCursorPayloadTest extends TestCase
         $this->as(Seat::Guest, $game)
             ->get("/games/{$game->code}")
             ->assertInertia(fn ($page) => $page->where('cursor', [
-                'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'contact:2', 'my_turn' => true,
+                'game_number' => 1, 'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'contact:2', 'my_turn' => true,
             ]));
     }
 
@@ -47,7 +47,7 @@ class TurnCursorPayloadTest extends TestCase
         $this->as(Seat::Host, $game)
             ->get("/games/{$game->code}")
             ->assertInertia(fn ($page) => $page->where('cursor', [
-                'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'contact:2', 'my_turn' => false,
+                'game_number' => 1, 'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'contact:2', 'my_turn' => false,
             ]));
     }
 
@@ -59,7 +59,7 @@ class TurnCursorPayloadTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->where('seat', null)
                 ->where('cursor', [
-                    'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'contact:2', 'my_turn' => false,
+                    'game_number' => 1, 'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'contact:2', 'my_turn' => false,
                 ]));
     }
 
@@ -70,7 +70,7 @@ class TurnCursorPayloadTest extends TestCase
         $this->as(Seat::Guest, $game)
             ->get("/games/{$game->code}")
             ->assertInertia(fn ($page) => $page->where('cursor', [
-                'turn_number' => 0, 'active_seat' => null, 'turn_stop' => null, 'my_turn' => true,
+                'game_number' => 1, 'turn_number' => 0, 'active_seat' => null, 'turn_stop' => null, 'my_turn' => true,
             ]));
 
         $this->as(Seat::Host, $game)
@@ -133,7 +133,7 @@ class TurnCursorPayloadTest extends TestCase
         $this->as(Seat::Guest, $game)
             ->get("/games/{$game->code}")
             ->assertInertia(fn ($page) => $page->where('cursor', [
-                'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'end', 'my_turn' => true,
+                'game_number' => 1, 'turn_number' => 3, 'active_seat' => 'guest', 'turn_stop' => 'end', 'my_turn' => true,
             ]));
 
         $this->as(Seat::Guest, $game)
@@ -143,7 +143,7 @@ class TurnCursorPayloadTest extends TestCase
         $this->as(Seat::Guest, $game)
             ->get("/games/{$game->code}")
             ->assertInertia(fn ($page) => $page->where('cursor', [
-                'turn_number' => 4, 'active_seat' => 'host', 'turn_stop' => null, 'my_turn' => false,
+                'game_number' => 1, 'turn_number' => 4, 'active_seat' => 'host', 'turn_stop' => null, 'my_turn' => false,
             ]));
     }
 }

@@ -20,6 +20,7 @@ class RelayBoardRequest extends ActiveSeatRequest
     public function rules(): array
     {
         return [
+            'game_number' => ['required', 'integer', 'min:1'],
             'session' => ['required', 'string', 'max:64'],
             'seq' => ['required', 'integer', 'min:0'],
             'state' => ['required', 'array'],

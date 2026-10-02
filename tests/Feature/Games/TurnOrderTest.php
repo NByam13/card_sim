@@ -92,7 +92,7 @@ class TurnOrderTest extends TestCase
         $this->as(Seat::Host, $game)
             ->postJson("/games/{$game->code}/turn-order/elect", ['first_player' => 'guest'])
             ->assertOk()
-            ->assertExactJson(['first_player' => 'guest']);
+            ->assertExactJson(['first_player' => 'guest', 'game_number' => 1]);
 
         $this->assertSame(Seat::Guest, $game->refresh()->first_player);
         Event::assertDispatched(TurnOrderDecided::class, fn (TurnOrderDecided $event) => $event->firstPlayer === Seat::Guest);

@@ -291,6 +291,22 @@ class Game extends Model
     }
 
     /**
+     * Save a seat's board for the game it was played in. Returns false, writing
+     * nothing, once the match has moved on to another game.
+     *
+     * @param  array<string, mixed>  $state
+     * @param  array<string, mixed>  $publicState
+     */
+    public function saveBoard(Seat $seat, int $gameNumber, array $state, array $publicState, int $seq): bool
+    {
+        return $this->fillWhere([
+            $seat->column('state') => $state,
+            $seat->column('public_state') => $publicState,
+            $seat->column('seq') => $seq,
+        ], fn (Builder $query) => $query->where('game_number', $gameNumber));
+    }
+
+    /**
      * The columns that make a seat's saved board absent.
      *
      * @return array<string, null|int>
@@ -309,6 +325,12 @@ class Game extends Model
     public function gamesToWin(): int
     {
         return $this->format->gamesToWin();
+    }
+
+    /** Whether the game in progress is the match's first, the one decided by a roll. */
+    public function isFirstGame(): bool
+    {
+        return $this->game_number === 1;
     }
 
     /** Whether the game in progress already has its result recorded. */
@@ -347,8 +369,12 @@ class Game extends Model
     }
 
     /**
-     * Record the winner of the game in progress, and finish the match if that
-     * game decided it. Returns whether this call's result was the one kept.
+     * Record the winner of the game in progress, then either finish the match or
+     * set up the next game. Returns whether this call's result was the one kept.
+     *
+     * The next game goes back through the turn-order gate with both boards
+     * cleared, the loser electing in place of a roll: a null `first_player` is
+     * what opens the gate, and a null board is what makes a client deal fresh.
      *
      * Guarded on the results already recorded, so a claim and a concession
      * landing at once record one game, not two.
@@ -366,13 +392,33 @@ class Game extends Model
             ['game' => $this->game_number, 'winner' => $winnerSeat->value, 'reason' => $reason->value],
         ]];
 
-        if ($this->winsFor($winnerSeat) + 1 >= $this->gamesToWin()) {
-            $values += ['status' => GameStatus::Finished, 'winner_seat' => $winnerSeat];
-        }
+        $values += $this->winsFor($winnerSeat) + 1 >= $this->gamesToWin()
+            ? ['status' => GameStatus::Finished, 'winner_seat' => $winnerSeat]
+            : $this->nextGame();
 
         return $this->fillWhere($values, fn (Builder $query) => $query
             ->where('status', GameStatus::Active)
             ->whereJsonLength('game_results', $recorded));
+    }
+
+    /**
+     * The columns that start the next game: turn order undecided, the cursor
+     * back before turn 1, and both boards gone.
+     *
+     * @return array<string, mixed>
+     */
+    private function nextGame(): array
+    {
+        return [
+            'game_number' => $this->game_number + 1,
+            'first_player' => null,
+            'turn_order_roll' => null,
+            'turn_number' => 0,
+            'active_seat' => null,
+            'turn_stop' => null,
+            ...$this->clearedBoard(Seat::Host),
+            ...$this->clearedBoard(Seat::Guest),
+        ];
     }
 
     // ── Turn order ──────────────────────────────────────────────────────────
@@ -394,6 +440,21 @@ class Game extends Model
         }
 
         return $seat === $this->first_player;
+    }
+
+    /**
+     * The seat that elects who goes first: the roll winner in game 1, and the
+     * loser of the last game after it. Null in game 1 before the roll.
+     */
+    public function turnOrderChooser(): ?Seat
+    {
+        if ($this->isFirstGame()) {
+            return $this->rollWinner();
+        }
+
+        $last = Arr::last($this->game_results);
+
+        return $last === null ? null : Seat::from($last['winner'])->opposing();
     }
 
     /**
@@ -432,7 +493,7 @@ class Game extends Model
     }
 
     /**
-     * Store a roll unless one is already stored or the match has left play.
+     * Store a roll unless one is already stored, or the game has moved on.
      * Returns whether this call's roll was the one kept; either way the model
      * holds the stored row afterwards.
      *
@@ -463,21 +524,26 @@ class Game extends Model
     /**
      * Turn order as it stands, for everyone at the table.
      *
-     * @return array{roll: array{host: array<int, int>, guest: array<int, int>, winner: 'host'|'guest', rerolls: int}|null, first_player: string|null}
+     * @return array{roll: array{host: array<int, int>, guest: array<int, int>, winner: 'host'|'guest', rerolls: int}|null, first_player: string|null, chooser: string|null, game_number: int}
      */
     public function turnOrder(): array
     {
         return [
+            'game_number' => $this->game_number,
             'roll' => $this->turn_order_roll,
             'first_player' => $this->first_player?->value,
+            'chooser' => $this->turnOrderChooser()?->value,
         ];
     }
 
-    /** Write a column only while it is still null and the match is in play. */
+    /** Write a column only while it is still null, in the same game, with the match in play. */
     private function fillIfNull(string $column, mixed $value): bool
     {
+        $gameNumber = $this->getRawOriginal('game_number');
+
         return $this->fillWhere([$column => $value], fn (Builder $query) => $query
             ->where('status', GameStatus::Active)
+            ->where('game_number', $gameNumber)
             ->whereNull($column));
     }
 
@@ -556,11 +622,12 @@ class Game extends Model
     /**
      * The whole cursor, as it is broadcast and returned.
      *
-     * @return array{turn_number: int, active_seat: string|null, turn_stop: string|null}
+     * @return array{game_number: int, turn_number: int, active_seat: string|null, turn_stop: string|null}
      */
     public function cursor(): array
     {
         return [
+            'game_number' => $this->game_number,
             'turn_number' => $this->turn_number,
             'active_seat' => $this->active_seat?->value,
             'turn_stop' => $this->turn_stop,
@@ -582,7 +649,7 @@ class Game extends Model
     /**
      * The cursor as one viewer sees it, with whether it is theirs to move.
      *
-     * @return array{turn_number: int, active_seat: string|null, turn_stop: string|null, my_turn: bool}
+     * @return array{game_number: int, turn_number: int, active_seat: string|null, turn_stop: string|null, my_turn: bool}
      */
     public function phaseState(?Seat $viewer): array
     {

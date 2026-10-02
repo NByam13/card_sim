@@ -27,6 +27,8 @@ class BoardSyncController extends Controller
     {
         $validated = $request->validated();
 
+        abort_if($validated['game_number'] !== $game->game_number, 409, 'That board belongs to an earlier game.');
+
         broadcast(new BoardStateUpdated(
             $game,
             $request->seat(),
@@ -44,12 +46,11 @@ class BoardSyncController extends Controller
         $seat = $request->seat();
         $validated = $request->validated();
 
-        $game->forceFill([
-            $seat->column('state') => $validated['state'],
-            $seat->column('public_state') => $validated['public_state'],
-            $seat->column('seq') => $validated['seq'],
-            'last_activity_at' => now(),
-        ])->save();
+        abort_if(
+            ! $game->saveBoard($seat, $validated['game_number'], $validated['state'], $validated['public_state'], $validated['seq']),
+            409,
+            'That board belongs to an earlier game.',
+        );
 
         return response()->json(['saved' => true]);
     }

@@ -19,7 +19,7 @@ class TurnOrderPayloadTest extends TestCase
         $game = Game::factory()->hostToken('host-token')->guestToken('guest-token')->create();
 
         $this->get("/games/{$game->code}")
-            ->assertInertia(fn ($page) => $page->where('turnOrder', ['roll' => null, 'first_player' => null]));
+            ->assertInertia(fn ($page) => $page->where('turnOrder', ['game_number' => 1, 'roll' => null, 'first_player' => null, 'chooser' => null]));
     }
 
     public function test_the_roll_is_shown_before_the_winner_elects(): void

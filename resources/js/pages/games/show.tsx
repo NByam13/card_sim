@@ -234,7 +234,6 @@ function Playing({
   useEffect(() => setAccepted(game.accepted), [game.accepted]);
 
   const matchLive = accepted.host && accepted.guest;
-  const [liveOnMount] = useState(matchLive);
   // The other seat turning up while this board was on screen, as opposed to
   // already being there when the page loaded. Only the first is worth a modal.
   const [seatedOnMount] = useState(seated);
@@ -242,10 +241,12 @@ function Playing({
 
   const { publish, announce } = useBoardRelay({
     code: game.code,
+    gameNumber: game.game_number,
+    onStale: reloadIntoCurrentGame,
     relaying: matchLive,
     saving: game.status === GameStatus.Active,
   });
-  const { mirror, receive } = useMirror(lookupCard, game.opponent_state);
+  const { mirror, receive } = useMirror(lookupCard, game.opponent_state, game.game_number);
   const turn = useTurnCursor({ code: game.code, seat, cursor });
   const order = useTurnOrder({ code: game.code, turnOrder: servedTurnOrder });
   const firstPlayer = order.turnOrder.first_player;
@@ -266,7 +267,7 @@ function Playing({
     onTurnOrderDecided: order.receiveDecided,
     onGameFinished: useCallback((result: GameFinishedPayload) => {
       setFinished(result);
-      router.reload({ only: ['game', 'cursor'] });
+      reloadIntoCurrentGame();
     }, []),
     // Presence cannot tell a watcher from the player who just sat down, and the
     // props this page is holding predate the claim either way.
@@ -292,10 +293,12 @@ function Playing({
   );
 
   // A match starting re-deals both halves, so the hand someone goldfished while
-  // they waited does not become the hand they play. The key remounts the arena;
-  // dropping the restore is what stops it dealing the discarded board again.
-  const arenaKey = matchLive ? 'match' : 'solo';
-  const savedState = matchLive && !liveOnMount ? null : restored;
+  // they waited does not become the hand they play. So does each next game of a
+  // Bo3. The key remounts the arena; dropping the restore is what stops it
+  // dealing the discarded board again.
+  const arenaKey = matchLive ? `match:${game.game_number}` : 'solo';
+  const [arenaKeyOnMount] = useState(arenaKey);
+  const savedState = arenaKey === arenaKeyOnMount ? restored : null;
 
   const gameUndecided =
     matchLive &&
@@ -424,6 +427,7 @@ function Playing({
         <TurnOrderModal
           seat={seat}
           names={seatNames(game)}
+          gameNumber={game.game_number}
           turnOrder={order.turnOrder}
           opponentPresent={opponentPresent !== false}
           onRoll={order.roll}
@@ -478,6 +482,9 @@ function Playing({
     </>
   );
 }
+
+/** In a Bo3 the match may have moved on to the next game, with turn order to decide again. */
+const reloadIntoCurrentGame = () => router.reload({ only: ['game', 'cursor', 'turnOrder'] });
 
 function seatNames(game: Game): Record<Seat, string> {
   return {

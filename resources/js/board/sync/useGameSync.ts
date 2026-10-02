@@ -59,8 +59,8 @@ export function useGameSync({
   onTurnAdvanced: (cursor: WireCursor) => void;
   /** The dice were rolled. Also heard by the seat that rolled. */
   onTurnOrderRolled: (roll: TurnOrderRoll) => void;
-  /** The roll winner chose who goes first. Also heard by the seat that chose. */
-  onTurnOrderDecided: (firstPlayer: Seat) => void;
+  /** The chooser decided who goes first. Also heard by the seat that chose. */
+  onTurnOrderDecided: (firstPlayer: Seat, gameNumber: number) => void;
   /** A game was recorded, by either seat. Also heard by the seat that ended it. */
   onGameFinished: (result: GameFinishedPayload) => void;
 }): {
@@ -136,7 +136,8 @@ export function useGameSync({
     listenForTurns(presence, {
       onTurnAdvanced: (cursor) => handlers.current.onTurnAdvanced(cursor),
       onTurnOrderRolled: (roll) => handlers.current.onTurnOrderRolled(roll),
-      onTurnOrderDecided: (firstPlayer) => handlers.current.onTurnOrderDecided(firstPlayer),
+      onTurnOrderDecided: (firstPlayer, gameNumber) =>
+        handlers.current.onTurnOrderDecided(firstPlayer, gameNumber),
     });
   }, [channel, seat]);
 
@@ -147,7 +148,7 @@ export function useGameSync({
 export interface TurnListeners {
   onTurnAdvanced: (cursor: WireCursor) => void;
   onTurnOrderRolled: (roll: TurnOrderRoll) => void;
-  onTurnOrderDecided: (firstPlayer: Seat) => void;
+  onTurnOrderDecided: (firstPlayer: Seat, gameNumber: number) => void;
 }
 
 /** Bind the turn events on a game channel. */
@@ -161,8 +162,10 @@ export function listenForTurns(
   channel.listen('.turn_order.rolled', ({ roll }: { roll: TurnOrderRoll }) =>
     listeners.onTurnOrderRolled(roll)
   );
-  channel.listen('.turn_order.decided', ({ first_player }: { first_player: Seat }) =>
-    listeners.onTurnOrderDecided(first_player)
+  channel.listen(
+    '.turn_order.decided',
+    ({ first_player, game_number }: { first_player: Seat; game_number: number }) =>
+      listeners.onTurnOrderDecided(first_player, game_number)
   );
 }
 
@@ -183,6 +186,11 @@ export async function postJson<T = unknown>(url: string, data: unknown): Promise
 
   // An empty body (a 204, say) is a success with nothing in it, not a parse error.
   return (response.data.trim() === '' ? undefined : JSON.parse(response.data)) as T;
+}
+
+/** Whether a `postJson` failure was the server answering 409. */
+export function isConflict(error: unknown): boolean {
+  return (error as { response?: { status?: number } } | null)?.response?.status === 409;
 }
 
 /** Resolve a card through this app's cached proxy. Null when it cannot be. */

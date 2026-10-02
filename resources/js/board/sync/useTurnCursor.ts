@@ -15,9 +15,14 @@ import { postJson } from './useGameSync';
 
 /** A press's turn start, for the turn it opens. */
 interface TurnStart {
+  game: number;
   turn: number;
   run: () => void;
 }
+
+/** Whether `a` is from before `b`. Turn numbers restart each game, so games come first. */
+const isOlder = (a: WireCursor, b: WireCursor) =>
+  a.game_number !== b.game_number ? a.game_number < b.game_number : a.turn_number < b.turn_number;
 
 /**
  * The shared turn cursor, live: seeded from the show payload, moved by
@@ -58,13 +63,14 @@ export function useTurnCursor({
   const latest = useRef(served);
   const inFlight = useRef(false);
   // Every path to a turn start goes through `start`, which runs each turn's once.
-  const startedTurn = useRef<number | null>(null);
+  const startedTurn = useRef<string | null>(null);
   const held = useRef<TurnStart | null>(null);
 
   const start = useCallback((turnStart: TurnStart) => {
     held.current = null;
-    if (startedTurn.current === turnStart.turn) return;
-    startedTurn.current = turnStart.turn;
+    const key = `${turnStart.game}:${turnStart.turn}`;
+    if (startedTurn.current === key) return;
+    startedTurn.current = key;
     turnStart.run();
   }, []);
 
@@ -74,7 +80,10 @@ export function useTurnCursor({
       const turnStart = held.current;
       if (!turnStart) return;
 
-      const sameTurn = cursor.turn_number === turnStart.turn && cursor.my_turn;
+      const sameTurn =
+        cursor.game_number === turnStart.game &&
+        cursor.turn_number === turnStart.turn &&
+        cursor.my_turn;
       if (sameTurn && cursor.turn_stop !== null) {
         start(turnStart);
       } else if (!sameTurn || final) {
@@ -95,14 +104,14 @@ export function useTurnCursor({
 
   // A reload answered before a broadcast it arrives after is older than the cursor already held.
   useEffect(() => {
-    if (served.turn_number < latest.current.turn_number) return;
+    if (isOlder(served, latest.current)) return;
     apply(served, true);
   }, [apply, served]);
 
   // The mover hears its own `.turn.advanced` too, and that echo can land after the response.
   const receive = useCallback(
     (wire: WireCursor) => {
-      if (wire.turn_number < latest.current.turn_number) return;
+      if (isOlder(wire, latest.current)) return;
       apply({ ...wire, my_turn: wire.active_seat === seat }, false);
     },
     [apply, seat]
@@ -142,7 +151,11 @@ export function useTurnCursor({
       send(
         move,
         move && startsTurn(from, move)
-          ? { turn: trackTurn(from), run: () => onTurnStart(drawsOnTurnStart(from)) }
+          ? {
+              game: from.game_number,
+              turn: trackTurn(from),
+              run: () => onTurnStart(drawsOnTurnStart(from)),
+            }
           : undefined
       );
     },

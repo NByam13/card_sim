@@ -6,17 +6,20 @@ import TurnOrderModal, { DECIDED_HOLD_MS, ROLL_REVEAL_MS } from './TurnOrderModa
 
 const names: Record<Seat, string> = { host: 'Twilight', guest: 'Rarity' };
 
-const unrolled: TurnOrder = { roll: null, first_player: null };
+const unrolled: TurnOrder = { game_number: 1, roll: null, first_player: null, chooser: null };
 
 const rolled = (): TurnOrder => ({
+  game_number: 1,
   roll: { host: [6, 5], guest: [2, 1], winner: 'host', rerolls: 1 },
   first_player: null,
+  chooser: 'host',
 });
 
-function modal(turnOrder: TurnOrder, seat: Seat = 'host') {
+function modal(turnOrder: TurnOrder, seat: Seat = 'host', gameNumber = 1) {
   const props = {
     seat,
     names,
+    gameNumber,
     opponentPresent: true,
     onRoll: vi.fn(),
     onElect: vi.fn(),
@@ -99,6 +102,7 @@ describe('TurnOrderModal', () => {
       <TurnOrderModal
         seat="host"
         names={names}
+        gameNumber={1}
         turnOrder={unrolled}
         opponentPresent={false}
         onRoll={vi.fn()}
@@ -108,5 +112,38 @@ describe('TurnOrderModal', () => {
     );
 
     expect(screen.getByText('Away')).toBeInTheDocument();
+  });
+
+  describe('between games of a Bo3', () => {
+    const loserChooses: TurnOrder = {
+      game_number: 1,
+      roll: null,
+      first_player: null,
+      chooser: 'guest',
+    };
+
+    it("lets the last game's loser choose, with no dice in sight", () => {
+      const { onElect, onRoll } = modal(loserChooses, 'guest', 2);
+
+      expect(screen.getByText('Game 2')).toBeInTheDocument();
+      expect(screen.getByText('You lost the last game. Your call:')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Roll the dice' })).toBeNull();
+      expect(screen.queryByText('vs')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: /Go first/ }));
+
+      expect(onElect).toHaveBeenCalledWith('guest');
+      expect(onRoll).not.toHaveBeenCalled();
+    });
+
+    it('leaves the winner waiting on the loser, with nothing to press', () => {
+      modal(loserChooses, 'host', 3);
+
+      expect(screen.getByText('Game 3')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Rarity lost the last game and is choosing who goes first/)
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button')).toBeNull();
+    });
   });
 });

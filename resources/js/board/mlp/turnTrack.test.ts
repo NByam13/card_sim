@@ -14,6 +14,7 @@ import {
 } from './turnTrack';
 
 const cursor = (over: Partial<TurnCursor> = {}): TurnCursor => ({
+  game_number: 1,
   turn_number: 3,
   active_seat: 'host',
   turn_stop: null,
@@ -25,6 +26,7 @@ const cursor = (over: Partial<TurnCursor> = {}): TurnCursor => ({
 function land(at: TurnCursor, move: CursorMove): TurnCursor {
   if ('ends_turn' in move) {
     return {
+      game_number: 1,
       turn_number: at.turn_number + 1,
       active_seat: 'guest',
       turn_stop: null,
@@ -82,7 +84,9 @@ describe('next', () => {
   });
 
   it('opens the game onto turn 1 main', () => {
-    expect(next(cursor({ turn_number: 0, active_seat: null }))).toEqual({ turn_stop: 'main' });
+    expect(next(cursor({ turn_number: 0, active_seat: null }))).toEqual({
+      turn_stop: 'main',
+    });
     expect(walk(cursor({ turn_number: 0, active_seat: null }))).toHaveLength(3);
   });
 
@@ -101,7 +105,9 @@ describe('previous', () => {
   it('steps back one stop at a time', () => {
     expect(previous(cursor({ turn_stop: 'end' }))).toEqual({ turn_stop: 'contact:3' });
     expect(previous(cursor({ turn_stop: 'contact:1' }))).toEqual({ turn_stop: 'main' });
-    expect(previous(cursor({ turn_number: 1, turn_stop: 'end' }))).toEqual({ turn_stop: 'main' });
+    expect(previous(cursor({ turn_number: 1, turn_stop: 'end' }))).toEqual({
+      turn_stop: 'main',
+    });
   });
 
   it('never steps back out of main or across a turn', () => {

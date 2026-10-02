@@ -53,6 +53,7 @@ class BoardStateUpdated implements ShouldBroadcastNow, ShouldRescue
     {
         return [
             'seat' => $this->seat->value,
+            'game_number' => $this->game->game_number,
             'session' => $this->session,
             'seq' => $this->seq,
             'state' => $this->state,
