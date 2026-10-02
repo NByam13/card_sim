@@ -146,6 +146,28 @@ describe('useWinClaim', () => {
     expect(router.reload).toHaveBeenCalledWith({ only: ['game', 'cursor', 'turnOrder'] });
   });
 
+  it('saves the board before the claim stops saves', async () => {
+    const order: string[] = [];
+    let saved!: () => void;
+    const beforeRecord = vi.fn(() => {
+      order.push('save');
+      return new Promise<void>((resolve) => (saved = resolve));
+    });
+    posted.mockImplementationOnce(async () => {
+      order.push('claim');
+      return {};
+    });
+    const { result } = renderHook(() =>
+      useWinClaim({ code: 'abc123', gameNumber: 2, beforeRecord, restoring: null, enabled: true })
+    );
+
+    act(() => result.current.claim());
+    expect(posted).not.toHaveBeenCalled();
+    await act(async () => saved());
+
+    expect(order).toEqual(['save', 'claim']);
+  });
+
   it('keeps the prompt open with an error when the claim is refused', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     posted.mockRejectedValueOnce(new Error('409'));

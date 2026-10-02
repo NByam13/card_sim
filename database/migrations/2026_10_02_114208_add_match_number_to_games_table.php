@@ -1,7 +1,9 @@
 <?php
 
+use App\Enums\GameStatus;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -17,6 +19,11 @@ return new class extends Migration
         Schema::table('games', function (Blueprint $table) {
             $table->unsignedInteger('match_number')->default(1);
         });
+
+        // Rows finished before a finish cleared the acceptances.
+        DB::table('games')
+            ->where('status', GameStatus::Finished->value)
+            ->update(['host_accepted_at' => null, 'guest_accepted_at' => null]);
     }
 
     public function down(): void

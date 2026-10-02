@@ -31,7 +31,12 @@ class TurnOrderController extends Controller
     public function elect(Game $game, ElectFirstPlayerRequest $request): JsonResponse
     {
         if (! $game->electFirstPlayer($request->firstPlayer())) {
-            abort_if($game->fresh()?->game_number !== $request->gameNumber(), 409, 'That was for an earlier game.');
+            $fresh = $game->fresh();
+            abort_if(
+                $fresh?->match_number !== $game->match_number || $fresh->game_number !== $request->gameNumber(),
+                409,
+                'That was for an earlier game.',
+            );
             abort(403, 'Turn order is already decided.');
         }
 

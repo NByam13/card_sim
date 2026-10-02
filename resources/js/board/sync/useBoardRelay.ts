@@ -45,6 +45,8 @@ export function useBoardRelay({
   publish: (state: GameState) => void;
   /** Re-send the last board, for someone who just arrived blank. */
   announce: () => void;
+  /** Save a board still waiting on the debounce now. Settles either way. */
+  flush: () => Promise<void>;
 } {
   // One session per mount. A remount restarts `seq`, and a mirror takes a new
   // session's frames whatever their sequence — see `shouldAcceptFrame`.
@@ -96,19 +98,29 @@ export function useBoardRelay({
     [code, matchNumber, failed]
   );
 
-  const save = useCallback(() => {
+  const save = useCallback((): Promise<void> => {
+    saveTimer.current = undefined;
     const current = latest.current;
-    if (!current || !savingRef.current) return;
+    if (!current || !savingRef.current) return Promise.resolve();
 
     // A save still pending when the game moves on is refused, not written over the next one.
-    postJson(`/games/${code}/state`, {
+    return postJson(`/games/${code}/state`, {
       match_number: matchNumber,
       game_number: current.gameNumber,
       seq: seq.current,
       state: compactState(current.state),
       public_state: current.publicState,
-    }).catch((error) => failed('save', current.gameNumber, error));
+    })
+      .then(() => undefined)
+      .catch((error) => failed('save', current.gameNumber, error));
   }, [code, matchNumber, failed]);
+
+  const flush = useCallback(() => {
+    if (saveTimer.current === undefined) return Promise.resolve();
+
+    clearTimeout(saveTimer.current);
+    return save();
+  }, [save]);
 
   const publish = useCallback(
     (state: GameState) => {
@@ -142,5 +154,5 @@ export function useBoardRelay({
     [save]
   );
 
-  return { publish, announce };
+  return { publish, announce, flush };
 }

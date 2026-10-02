@@ -60,6 +60,25 @@ describe('useConcede', () => {
     });
   });
 
+  it('saves the board before the concede stops saves', async () => {
+    const order: string[] = [];
+    const beforeRecord = vi.fn(async () => {
+      order.push('save');
+    });
+    posted.mockImplementationOnce(async () => {
+      order.push('concede');
+      return {};
+    });
+    const { result } = renderHook(() =>
+      useConcede({ code: 'abc123', gameNumber: 2, beforeRecord, enabled: true })
+    );
+    act(() => result.current.open());
+
+    await act(async () => result.current.concede());
+
+    expect(order).toEqual(['save', 'concede']);
+  });
+
   it('stays open with an error when the concede is refused', async () => {
     posted.mockRejectedValueOnce(new Error('409'));
     vi.spyOn(console, 'error').mockImplementation(() => {});

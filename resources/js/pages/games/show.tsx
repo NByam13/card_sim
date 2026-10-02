@@ -259,7 +259,7 @@ function Playing({
   const [seatedOnMount] = useState(seated);
   const [declined, setDeclined] = useState(false);
 
-  const { publish, announce } = useBoardRelay({
+  const { publish, announce, flush } = useBoardRelay({
     code: game.code,
     matchNumber: game.match_number,
     gameNumber: game.game_number,
@@ -335,6 +335,7 @@ function Playing({
     code: game.code,
     matchNumber: game.match_number,
     gameNumber: game.game_number,
+    beforeRecord: flush,
     restoring: savedState,
     enabled: gameUndecided && firstPlayer !== null,
   });
@@ -342,6 +343,7 @@ function Playing({
     code: game.code,
     matchNumber: game.match_number,
     gameNumber: game.game_number,
+    beforeRecord: flush,
     enabled: gameUndecided,
   });
   const onBoardState = useCallback(

@@ -302,7 +302,7 @@ class Game extends Model
 
     /**
      * Accept a rematch of a finished match. The boards stay until both seats
-     * have, so the final position is still on the table meanwhile.
+     * have.
      *
      * Each seat tries the reset after its own write, guarded on both answers
      * and the match still being over, so two seats accepting at once start
@@ -337,7 +337,9 @@ class Game extends Model
             $seat->column('state') => $state,
             $seat->column('public_state') => $publicState,
             $seat->column('seq') => $seq,
-        ], fn (Builder $query) => $query->where('game_number', $gameNumber));
+        ], fn (Builder $query) => $query
+            ->where('match_number', $this->getRawOriginal('match_number'))
+            ->where('game_number', $gameNumber));
     }
 
     /**
@@ -416,6 +418,7 @@ class Game extends Model
     public function recordGameResult(Seat $winnerSeat, WinReason $reason): bool
     {
         $recorded = count($this->game_results);
+        $matchNumber = $this->getRawOriginal('match_number');
 
         if ($this->status !== GameStatus::Active || $this->currentGameDecided()) {
             return false;
@@ -432,12 +435,12 @@ class Game extends Model
 
         return $this->fillWhere($values, fn (Builder $query) => $query
             ->where('status', GameStatus::Active)
+            ->where('match_number', $matchNumber)
             ->whereJsonLength('game_results', $recorded));
     }
 
     /**
-     * The columns that end the match. Both acceptances go with it: the answers
-     * were to this match, and a rematch asks the same question again.
+     * The columns that end the match, clearing both acceptances.
      *
      * @return array<string, mixed>
      */
@@ -607,10 +610,12 @@ class Game extends Model
     /** Write a column only while it is still null, in the same game, with the match in play. */
     private function fillIfNull(string $column, mixed $value): bool
     {
+        $matchNumber = $this->getRawOriginal('match_number');
         $gameNumber = $this->getRawOriginal('game_number');
 
         return $this->fillWhere([$column => $value], fn (Builder $query) => $query
             ->where('status', GameStatus::Active)
+            ->where('match_number', $matchNumber)
             ->where('game_number', $gameNumber)
             ->whereNull($column));
     }
@@ -677,6 +682,7 @@ class Game extends Model
             default => ['turn_stop' => $turnStop],
         };
 
+        $matchNumber = $this->getRawOriginal('match_number');
         $gameNumber = $this->getRawOriginal('game_number');
         $turnNumber = $this->getRawOriginal('turn_number');
         $activeSeat = $this->getRawOriginal('active_seat');
@@ -684,6 +690,7 @@ class Game extends Model
 
         return $this->fillWhere($cursor, fn (Builder $query) => $query
             ->where('status', GameStatus::Active)
+            ->where('match_number', $matchNumber)
             ->where('game_number', $gameNumber)
             ->whereJsonLength('game_results', $recorded)
             ->where('turn_number', $turnNumber)

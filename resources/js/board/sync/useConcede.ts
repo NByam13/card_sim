@@ -8,11 +8,14 @@ export function useConcede({
   code,
   matchNumber,
   gameNumber,
+  beforeRecord,
   enabled,
 }: {
   code: string;
   /** The match in progress. A rematch starts the game number over. */
   matchNumber?: number;
+  /** Runs first, and is waited on: the board saved as it stands, since the result stops saves. */
+  beforeRecord?: () => Promise<void>;
   /** The game being conceded. A concede for one already over is refused. */
   gameNumber: number;
   enabled: boolean;
@@ -45,8 +48,10 @@ export function useConcede({
     inFlight.current = true;
     setBusy(true);
     setError(null);
+    const record = () =>
+      postJson(concedeRoute.url(code), { match_number: matchNumber, game_number: gameNumber });
 
-    postJson(concedeRoute.url(code), { match_number: matchNumber, game_number: gameNumber })
+    (beforeRecord ? beforeRecord().then(record) : record())
       .then(() => setConfirming(false))
       .catch((failure) => {
         console.error('failed to concede', failure);
@@ -57,7 +62,7 @@ export function useConcede({
         setBusy(false);
         reloadIntoCurrentGame();
       });
-  }, [code, matchNumber, gameNumber]);
+  }, [code, matchNumber, gameNumber, beforeRecord]);
 
   return { confirming: enabled && confirming, open, dismiss, concede, busy, error };
 }

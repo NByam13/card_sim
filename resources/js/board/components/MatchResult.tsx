@@ -38,7 +38,7 @@ export function MatchSummary({
     <div className="space-y-3 text-center">
       {winner && (
         <h2 id="match-result-title" className="text-lg font-semibold">
-          {winner === seat ? 'You won' : `${names[winner]} won`} the {bo3 ? 'match' : 'game'}
+          {nameOf(winner)} won the {bo3 ? 'match' : 'game'}
         </h2>
       )}
       {bo3 && (
@@ -60,7 +60,7 @@ export function MatchSummary({
   );
 }
 
-/** Asking for a rematch, or answering one. It is the match handshake again, so it reads like it. */
+/** Asking for a rematch, or answering one. */
 function Rematch({
   seat,
   opponentName,
@@ -164,7 +164,7 @@ export function MatchOverBar({
         </span>
         {winner && (
           <span className="font-medium text-gray-700">
-            {winner === seat ? 'You won' : `${names[winner]} won`}
+            {namer(seat, names)(winner)} won
             {match.format === MatchFormat.Bo3 && ` ${match.wins[seat]}–${match.wins[opponent]}`}
           </span>
         )}

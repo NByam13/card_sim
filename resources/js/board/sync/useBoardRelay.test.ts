@@ -203,6 +203,27 @@ describe('useBoardRelay', () => {
       expect(callsTo('/state')[0][1]).toMatchObject({ match_number: 2, game_number: 1 });
     });
 
+    it('saves a board still waiting on the debounce when flushed', async () => {
+      const { result } = relay();
+
+      act(() => result.current.publish(boardWith([card('TEST-C01')])));
+      await act(() => result.current.flush());
+      expect(callsTo('/state')).toHaveLength(1);
+
+      act(() => vi.advanceTimersByTime(1500));
+      expect(callsTo('/state')).toHaveLength(1);
+    });
+
+    it('has nothing to flush once the board is saved', async () => {
+      const { result } = relay();
+
+      act(() => result.current.publish(boardWith([card('TEST-C01')])));
+      act(() => vi.advanceTimersByTime(1500));
+      await act(() => result.current.flush());
+
+      expect(callsTo('/state')).toHaveLength(1);
+    });
+
     it('saves what is on the board when it is left mid-move', () => {
       const { result, unmount } = relay();
 
