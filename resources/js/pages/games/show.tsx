@@ -1,7 +1,6 @@
 import { accept, destroy } from '@/actions/App/Http/Controllers/GameController';
 import BoardArena from '@/board/components/BoardArena';
 import ConcedeModal from '@/board/components/ConcedeModal';
-import GameFinishedModal from '@/board/components/GameFinishedModal';
 import MatchFormatToggle from '@/components/MatchFormatToggle';
 import Modal from '@/components/Modal';
 import MirrorBoard from '@/board/components/MirrorBoard';
@@ -10,7 +9,7 @@ import TurnOrderModal from '@/board/components/TurnOrderModal';
 import WinClaimModal, { MatchScore } from '@/board/components/WinClaimModal';
 import { contactLane } from '@/board/mlp/turnTrack';
 import { CompactGameState, expandState } from '@/board/sync/persist';
-import { GameFinishedPayload, PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
+import { PublicState, TurnCursor, TurnOrder } from '@/board/sync/types';
 import { useBoardRelay } from '@/board/sync/useBoardRelay';
 import { useConcede } from '@/board/sync/useConcede';
 import { Acceptance, lookupCard, useGameSync } from '@/board/sync/useGameSync';
@@ -256,7 +255,6 @@ function Playing({
     if (firstPlayer === null) setDecidingTurnOrder(true);
   }, [firstPlayer]);
   const turnOrderDecided = useCallback(() => setDecidingTurnOrder(false), []);
-  const [finished, setFinished] = useState<GameFinishedPayload | null>(null);
   const { opponentPresent } = useGameSync({
     code: game.code,
     seat,
@@ -265,10 +263,7 @@ function Playing({
     onTurnAdvanced: turn.receive,
     onTurnOrderRolled: order.receiveRoll,
     onTurnOrderDecided: order.receiveDecided,
-    onGameFinished: useCallback((result: GameFinishedPayload) => {
-      setFinished(result);
-      reloadIntoCurrentGame();
-    }, []),
+    onGameFinished: reloadIntoCurrentGame,
     // Presence cannot tell a watcher from the player who just sat down, and the
     // props this page is holding predate the claim either way.
     onSeatClaimed: useCallback(() => router.reload({ only: ['game'] }), []),
@@ -457,16 +452,6 @@ function Playing({
           error={concession.error}
           onConfirm={concession.concede}
           onClose={concession.dismiss}
-        />
-      )}
-
-      {finished && (
-        <GameFinishedModal
-          seat={seat}
-          opponentName={opponentName}
-          format={game.format}
-          result={finished}
-          onClose={() => setFinished(null)}
         />
       )}
 
